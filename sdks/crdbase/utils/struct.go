@@ -51,6 +51,30 @@ func EnsureStruct(i any) (any, error) {
 	return nil, errors.New("not a struct or a pointer to a struct")
 }
 
+// EnsureStructSlice Ensure that the type of the variable is a slice of struct
+func EnsureStructSlice(i any) (any, any, error) {
+	t := reflect.TypeOf(i)
+	if t.Kind() == reflect.Ptr {
+		t = t.Elem()
+	}
+
+	if t.Kind() != reflect.Slice {
+		return nil, nil, errors.New("not a slice")
+	}
+
+	underT := t.Elem()
+
+	if underT.Kind() != reflect.Ptr {
+		underT = underT.Elem()
+	}
+
+	if underT.Kind() != reflect.Struct {
+		return nil, nil, errors.New("not a slice of struct")
+	}
+
+	return t, underT, nil
+}
+
 // GetStructName returns the name of the struct
 func GetStructName(i any) string {
 	t := reflect.TypeOf(i)

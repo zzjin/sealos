@@ -100,7 +100,7 @@ func newCRDModelSchema(id string, m Model) (*CRDModelSchema, error) {
 				return nil, fmt.Errorf("field %s not found", field.Name)
 			}
 
-			if opt == "primary" {
+			if opt == "primaryKey" {
 				if primaryField != "" {
 					return nil, fmt.Errorf("duplicate primary field %s and %s", primaryField, field.Name)
 				}
@@ -157,5 +157,5 @@ func (crdms *CRDModelSchema) GetPrimaryFieldValue(m Model) string {
 		}
 	}
 
-	return utils.GenNanoID()
+	return ""
 }

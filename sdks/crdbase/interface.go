@@ -18,7 +18,7 @@ import (
 	"context"
 
 	"github.com/labring/crdbase/query"
-	cutil "sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
 type BaseConstructor interface {
@@ -27,11 +27,10 @@ type BaseConstructor interface {
 }
 
 type BaseWriter interface {
-	Create(ctx context.Context, model any) (string, cutil.OperationResult, error)
-	Delete(ctx context.Context, name string) error
+	Create(ctx context.Context, model any) (string, controllerutil.OperationResult, error)
+	CreateOrUpdate(ctx context.Context, model any) (string, controllerutil.OperationResult, error)
 
-	CreateOrUpdate(ctx context.Context, model any) (cutil.OperationResult, error)
-	CreateOrPatch(ctx context.Context, model any) (cutil.OperationResult, error)
+	Delete(ctx context.Context, name string) error
 	DeleteAllOf(ctx context.Context, query query.Query) error
 }
 

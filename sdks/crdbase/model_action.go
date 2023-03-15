@@ -24,6 +24,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/dynamic"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/kustomize/kyaml/yaml"
 )
@@ -31,27 +32,32 @@ import (
 type CRDModelAction struct {
 	CRDBase
 	CRDModelSchema
+
+	rdc dynamic.ResourceInterface
 }
 
 func (crdb CRDBase) Model(m Model) CRDModelAction {
-	schema := GetCRDModelSchema(m)
+	mSchema := GetCRDModelSchema(m)
+
+	gvr := schema.GroupVersionResource{
+		Group:    crdb.GroupVersion.Group,
+		Version:  crdb.GroupVersion.Version,
+		Resource: mSchema.ResourceName(),
+	}
 
 	return CRDModelAction{
 		CRDBase:        crdb,
-		CRDModelSchema: *schema,
-	}
-}
+		CRDModelSchema: *mSchema,
 
-func (crdms CRDModelAction) getResource() schema.GroupVersionResource {
-	return schema.GroupVersionResource{
-		Group:    crdms.GroupVersion.Group,
-		Version:  crdms.GroupVersion.Version,
-		Resource: crdms.ResourceName(),
+		rdc: crdb.dynamicClient.Resource(gvr).Namespace(crdb.Namespace),
 	}
 }
 
 func (crdms CRDModelAction) Create(ctx context.Context, model any) (string, controllerutil.OperationResult, error) {
 	uniqName := crdms.GetPrimaryFieldValue(model)
+	if uniqName == "" {
+		uniqName = utils.GenNanoID()
+	}
 
 	// Unstructured For create CR
 	cr, err := crdms.model2UnstructuredCR(uniqName, model)
@@ -59,19 +65,35 @@ func (crdms CRDModelAction) Create(ctx context.Context, model any) (string, cont
 		return "", controllerutil.OperationResultNone, err
 	}
 
-	rs := crdms.dynamicClient.Resource(crdms.getResource())
+	if _, err := crdms.rdc.Create(ctx, cr, metav1.CreateOptions{}); err != nil {
+		return "", controllerutil.OperationResultNone, err
+	}
+	return uniqName, controllerutil.OperationResultCreated, nil
+}
 
-	if _, err := rs.Get(ctx, uniqName, metav1.GetOptions{}); err != nil {
+func (crdms CRDModelAction) CreateOrUpdate(ctx context.Context, model any) (string, controllerutil.OperationResult, error) {
+	uniqName := crdms.GetPrimaryFieldValue(model)
+	if uniqName == "" {
+		return crdms.Create(ctx, model)
+	}
+
+	// Unstructured For create CR
+	cr, err := crdms.model2UnstructuredCR(uniqName, model)
+	if err != nil {
+		return "", controllerutil.OperationResultNone, err
+	}
+
+	if _, err := crdms.rdc.Get(ctx, uniqName, metav1.GetOptions{}); err != nil {
 		if !apierrors.IsNotFound(err) {
 			return "", controllerutil.OperationResultNone, err
 		}
-		if _, err := rs.Create(ctx, cr, metav1.CreateOptions{}); err != nil {
+		if _, err := crdms.rdc.Create(ctx, cr, metav1.CreateOptions{}); err != nil {
 			return "", controllerutil.OperationResultNone, err
 		}
 		return uniqName, controllerutil.OperationResultCreated, nil
 	}
 
-	if _, err := rs.Update(ctx, cr, metav1.UpdateOptions{}); err != nil {
+	if _, err := crdms.rdc.Update(ctx, cr, metav1.UpdateOptions{}); err != nil {
 		return "", controllerutil.OperationResultNone, err
 	}
 
@@ -100,58 +122,45 @@ func (crdms CRDModelAction) model2UnstructuredCR(name string, m Model) (*unstruc
 	}
 
 	y, _ := yaml.Marshal(mcr)
-	fmt.Println(string(y))
+	crdms.log.V(1).Info("model2UnstructuredCR", "unstructured", string(y))
 
 	return mcr, nil
 }
 
-func (crdms CRDModelAction) CreateOrUpdate(ctx context.Context, model any) (controllerutil.OperationResult, error) {
-	return controllerutil.OperationResultNone, nil
-}
-
-func (crdms CRDModelAction) CreateOrPatch(ctx context.Context, model any) (controllerutil.OperationResult, error) {
-	return controllerutil.OperationResultNone, nil
-}
-
 // Delete deletes the given object by name from datastore.
 func (crdms CRDModelAction) Delete(ctx context.Context, name string) error {
-	resource := crdms.dynamicClient.Resource(crdms.getResource()).Namespace(crdms.Namespace)
-	return resource.Delete(ctx, name, metav1.DeleteOptions{})
+	return crdms.rdc.Delete(ctx, name, metav1.DeleteOptions{})
+}
+
+func (crdms CRDModelAction) DeleteAllOf(ctx context.Context, query query.Query) error {
+	return nil
 }
 
 func (crdms CRDModelAction) Get(ctx context.Context, query query.Query, out any) error {
-	// names := Model2KindName(out)
-	// gvr := schema.GroupVersionResource{
-	// 	Group:    crdb.GroupVersion.Group,
-	// 	Version:  crdb.GroupVersion.Version,
-	// 	Resource: names.Plural,
-	// }
+	opt := metav1.ListOptions{}
 
-	// resource := crdb.dynamicClient.Resource(gvr).Namespace(crdb.Namespace)
+	gotList, err := crdms.rdc.List(ctx, opt)
+	if err != nil {
+		return err
+	}
 
-	// opt := metav1.ListOptions{}
+	if len(gotList.Items) == 0 {
+		return nil
+	}
 
-	// gots, err := resource.List(ctx, opt)
-	// if err != nil {
-	// 	return err
-	// }
+	got := gotList.Items[0]
 
-	// if len(gots.Items) == 0 {
-	// 	return nil
-	// }
-
-	// got := gots.Items[0]
-
-	// if err := utils.Map2JSONStruct(got.UnstructuredContent(), &out); err != nil {
-	// 	return fmt.Errorf("failed to convert map to struct: %w", err)
-	// }
+	if err := utils.Map2JSONStruct(got.UnstructuredContent(), &out); err != nil {
+		return fmt.Errorf("failed to convert map to struct: %w", err)
+	}
 
 	return nil
 
 }
 func (crdms CRDModelAction) List(ctx context.Context, query query.Query, out any) error {
-	return nil
-}
-func (crdms CRDModelAction) DeleteAllOf(ctx context.Context, query query.Query) error {
+	if _, _, err := utils.EnsureStructSlice(out); err != nil {
+		return fmt.Errorf("out must be a slice to struct")
+	}
+
 	return nil
 }
