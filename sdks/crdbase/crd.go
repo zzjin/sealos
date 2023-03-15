@@ -31,10 +31,10 @@ func (crdb *CRDBase) NewCustomResourceDefinition(
 			APIVersion: "apiextensions.k8s.io/v1",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      names.Plural + "." + crdb.GroupVersion.Group,
-			Namespace: crdb.Namespace,
+			Name: names.Plural + "." + crdb.GroupVersion.Group,
 			Annotations: map[string]string{
-				crdBaseURL + "/version": crdBasePackage,
+				crdBaseURL + "/version":     crdBasePackage,
+				crdBaseURL + "/api-version": crdApiVersion,
 			},
 		},
 		Spec: apiextv1.CustomResourceDefinitionSpec{

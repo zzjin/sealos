@@ -91,9 +91,9 @@ func (crdms CRDModelAction) model2UnstructuredCR(name string, m Model) (*unstruc
 			"kind":       crdms.Names.Kind,
 			"metadata": map[string]any{
 				"name": name,
-				"labels": map[string]any{
-					crdBaseURL + "/managed-by": providerName,
-				},
+				// "labels": map[string]any{
+				// 	crdBaseURL + "/managed-by": providerName,
+				// },
 			},
 			"spec": modelMap,
 		},

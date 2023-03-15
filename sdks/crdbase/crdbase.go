@@ -16,7 +16,6 @@ package crdb
 
 import (
 	"errors"
-	"time"
 
 	"github.com/go-logr/logr"
 	"github.com/labring/crdbase/utils"
@@ -43,15 +42,6 @@ const (
 
 var (
 	ErrNotFound = errors.New("notFound")
-)
-
-var (
-	providerName = crdBaseName + "-" + crdApiVersion
-)
-
-var (
-	PollInterval = 1 * time.Second
-	MaxWait      = 10 * time.Second
 )
 
 type CRDBaseConfig struct {

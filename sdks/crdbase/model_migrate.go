@@ -17,6 +17,7 @@ package crdb
 import (
 	"context"
 	"fmt"
+	"time"
 
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
@@ -124,6 +125,11 @@ func (crdb *CRDBase) installCRDs(ctx context.Context, crds []*apiextv1.CustomRes
 
 	return nil
 }
+
+var (
+	PollInterval = 1 * time.Second
+	MaxWait      = 10 * time.Second
+)
 
 // poller checks if all the resources have been found in discovery, and returns false if not.
 type poller struct {
