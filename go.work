@@ -10,6 +10,7 @@ use (
 	./controllers/metering
 	./controllers/terminal
 	./controllers/user
+	./sdks/crdbase
 	./service/auth
 	./service/hub
 	./service/payment

@@ -1,0 +1,1 @@
+Update https://github.com/fatih/structtag to expose errors, as https://github.com/fatih/structtag/pull/16 this pr never get merged.

@@ -12,7 +12,7 @@
 Note: currently we are using `acme`+`dns01` to auto create and manage certs.
 
 ### Apply `reflector` to sync tls secrets, Currently we are using `kubernetes-reflector` with pull approach
-1. Install [reflector](https://github.com/emberstack/kubernetes-reflector)
+1. Install [reflector](https://github.com/emberstack/kubernetes-reflector) to `kube-system` namespace.
 2. Update `Certificate` to share tls keys to destination namespaces.
 
 @see: https://cert-manager.io/docs/tutorials/syncing-secrets-across-namespaces/#using-reflector
