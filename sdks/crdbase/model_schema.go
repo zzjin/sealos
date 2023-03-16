@@ -141,16 +141,22 @@ func (crdms *CRDModelSchema) ResourceName() string {
 	return crdms.Names.Plural
 }
 
+func (crdms *CRDModelSchema) Kind() string {
+	return crdms.Names.Kind
+}
+
 func (crdms *CRDModelSchema) GetPrimaryFieldValue(m Model) string {
 	if crdms.PrimaryField != "" {
-		t := reflect.TypeOf(m)
-
-		if t.Kind() == reflect.Ptr {
-			t = t.Elem()
+		v := reflect.ValueOf(m)
+		if v.Kind() == reflect.Ptr {
+			v = v.Elem()
 		}
-
-		if t.Kind() == reflect.Struct {
-			str := reflect.ValueOf(m).FieldByName(crdms.PrimaryField).String()
+		v = v.FieldByName(crdms.PrimaryField)
+		if v.Kind() == reflect.Ptr {
+			v = v.Elem()
+		}
+		if v.Kind() == reflect.String {
+			str := v.String()
 			if str != "" {
 				return str
 			}

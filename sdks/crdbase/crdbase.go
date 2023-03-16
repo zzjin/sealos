@@ -22,9 +22,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	pkg_client "sigs.k8s.io/controller-runtime/pkg/client"
 	pkg_manager "sigs.k8s.io/controller-runtime/pkg/manager"
@@ -56,9 +54,9 @@ type CRDBase struct {
 
 	log logr.Logger
 
-	client        pkg_client.Client     // client
-	clientSet     *kubernetes.Clientset // raw client set
-	dynamicClient dynamic.Interface     // dynamic client
+	client    pkg_client.Client     // client
+	clientSet *kubernetes.Clientset // raw client set
+	// dynamicClient dynamic.Interface     // dynamic client
 }
 
 // NewCRDBase create a new crd base object for future use
@@ -76,12 +74,13 @@ func NewCRDBase(conf CRDBaseConfig, log ...logr.Logger) (*CRDBase, error) {
 	if conf.Manager != nil {
 		managerConf := conf.Manager.GetConfig()
 
-		client, err := pkg_client.New(managerConf, pkg_client.Options{})
-		if err != nil {
-			return nil, err
-		}
-		client = pkg_client.NewNamespacedClient(client, conf.Namespace)
-		ret.client = client
+		// client, err := pkg_client.New(managerConf, pkg_client.Options{})
+		// if err != nil {
+		// 	return nil, err
+		// }
+		// client = pkg_client.NewNamespacedClient(client, conf.Namespace)
+		// ret.client = client
+		ret.client = conf.Manager.GetClient()
 
 		clientSet, err := kubernetes.NewForConfig(managerConf)
 		if err != nil {
@@ -89,22 +88,22 @@ func NewCRDBase(conf CRDBaseConfig, log ...logr.Logger) (*CRDBase, error) {
 		}
 		ret.clientSet = clientSet
 
-		dynamicClient, err := dynamic.NewForConfig(managerConf)
-		if err != nil {
-			return nil, err
-		}
-		ret.dynamicClient = dynamicClient
+		// dynamicClient, err := dynamic.NewForConfig(managerConf)
+		// if err != nil {
+		// 	return nil, err
+		// }
+		// ret.dynamicClient = dynamicClient
 	}
 
-	if err := initScheme(); err != nil {
+	if err := ret.initScheme(); err != nil {
 		return nil, err
 	}
 
 	return ret, nil
 }
 
-func initScheme() error {
-	sch := runtime.NewScheme()
+func (crdb *CRDBase) initScheme() error {
+	sch := crdb.Manager.GetScheme()
 
 	if err := rbacv1.AddToScheme(sch); err != nil {
 		return err
@@ -124,3 +123,13 @@ func initScheme() error {
 func (crdb *CRDBase) Clone() *CRDBase {
 	return crdb
 }
+
+// func (crdb *CRDBase) NewClient() (pkg_client.Client, error) {
+// 	client, err := pkg_client.New(crdb.Manager.GetConfig(), pkg_client.Options{})
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	client = pkg_client.NewNamespacedClient(client, crdb.Namespace)
+
+// 	return client, nil
+// }

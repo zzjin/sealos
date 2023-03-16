@@ -21,10 +21,10 @@ import (
 	"github.com/labring/crdbase/query"
 	"github.com/labring/crdbase/utils"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/client-go/dynamic"
+	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/kustomize/kyaml/yaml"
 )
@@ -33,23 +33,21 @@ type CRDModelAction struct {
 	CRDBase
 	CRDModelSchema
 
-	rdc dynamic.ResourceInterface
+	gvk schema.GroupVersionKind
 }
 
 func (crdb CRDBase) Model(m Model) CRDModelAction {
 	mSchema := GetCRDModelSchema(m)
 
-	gvr := schema.GroupVersionResource{
-		Group:    crdb.GroupVersion.Group,
-		Version:  crdb.GroupVersion.Version,
-		Resource: mSchema.ResourceName(),
-	}
-
 	return CRDModelAction{
 		CRDBase:        crdb,
 		CRDModelSchema: *mSchema,
 
-		rdc: crdb.dynamicClient.Resource(gvr).Namespace(crdb.Namespace),
+		gvk: schema.GroupVersionKind{
+			Group:   crdb.GroupVersion.Group,
+			Version: crdb.GroupVersion.Version,
+			Kind:    mSchema.Kind(),
+		},
 	}
 }
 
@@ -65,7 +63,7 @@ func (crdms CRDModelAction) Create(ctx context.Context, model any) (string, cont
 		return "", controllerutil.OperationResultNone, err
 	}
 
-	if _, err := crdms.rdc.Create(ctx, cr, metav1.CreateOptions{}); err != nil {
+	if err := crdms.client.Create(ctx, cr); err != nil {
 		return "", controllerutil.OperationResultNone, err
 	}
 	return uniqName, controllerutil.OperationResultCreated, nil
@@ -83,17 +81,20 @@ func (crdms CRDModelAction) CreateOrUpdate(ctx context.Context, model any) (stri
 		return "", controllerutil.OperationResultNone, err
 	}
 
-	if _, err := crdms.rdc.Get(ctx, uniqName, metav1.GetOptions{}); err != nil {
+	getCR := crdms.NewGetUnstructured()
+
+	if err := crdms.client.Get(ctx, crdms.NamespacedName(uniqName), getCR); err != nil {
 		if !apierrors.IsNotFound(err) {
 			return "", controllerutil.OperationResultNone, err
 		}
-		if _, err := crdms.rdc.Create(ctx, cr, metav1.CreateOptions{}); err != nil {
+		if err := crdms.client.Create(ctx, cr); err != nil {
 			return "", controllerutil.OperationResultNone, err
 		}
 		return uniqName, controllerutil.OperationResultCreated, nil
 	}
 
-	if _, err := crdms.rdc.Update(ctx, cr, metav1.UpdateOptions{}); err != nil {
+	cr.SetResourceVersion(getCR.GetResourceVersion())
+	if err := crdms.client.Update(ctx, cr); err != nil {
 		return "", controllerutil.OperationResultNone, err
 	}
 
@@ -112,7 +113,8 @@ func (crdms CRDModelAction) model2UnstructuredCR(name string, m Model) (*unstruc
 			"apiVersion": crdms.ApiVersion(),
 			"kind":       crdms.Names.Kind,
 			"metadata": map[string]any{
-				"name": name,
+				"name":      name,
+				"namespace": crdms.Namespace,
 				// "labels": map[string]any{
 				// 	crdBaseURL + "/managed-by": providerName,
 				// },
@@ -127,9 +129,29 @@ func (crdms CRDModelAction) model2UnstructuredCR(name string, m Model) (*unstruc
 	return mcr, nil
 }
 
+func (crdms CRDModelAction) NamespacedName(name string) types.NamespacedName {
+	return types.NamespacedName{Namespace: crdms.Namespace, Name: name}
+}
+
+func (crdms CRDModelAction) NewGetUnstructured() *unstructured.Unstructured {
+	un := &unstructured.Unstructured{}
+	un.SetGroupVersionKind(crdms.gvk)
+	return un
+}
+
+func (crdms CRDModelAction) NewGetUnstructuredList() *unstructured.UnstructuredList {
+	unl := &unstructured.UnstructuredList{}
+	unl.SetGroupVersionKind(crdms.gvk)
+	return unl
+}
+
 // Delete deletes the given object by name from datastore.
 func (crdms CRDModelAction) Delete(ctx context.Context, name string) error {
-	return crdms.rdc.Delete(ctx, name, metav1.DeleteOptions{})
+	deleteObj := crdms.NewGetUnstructured()
+	deleteObj.SetNamespace(crdms.Namespace)
+	deleteObj.SetName(name)
+
+	return crdms.client.Delete(ctx, deleteObj)
 }
 
 func (crdms CRDModelAction) DeleteAllOf(ctx context.Context, query query.Query) error {
@@ -137,9 +159,12 @@ func (crdms CRDModelAction) DeleteAllOf(ctx context.Context, query query.Query) 
 }
 
 func (crdms CRDModelAction) Get(ctx context.Context, query query.Query, out any) error {
-	opt := metav1.ListOptions{}
+	//TODO: real options
+	opt := client.MatchingFields{}
 
-	gotList, err := crdms.rdc.List(ctx, opt)
+	gotList := crdms.NewGetUnstructuredList()
+
+	err := crdms.client.List(ctx, gotList, opt)
 	if err != nil {
 		return err
 	}

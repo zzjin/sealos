@@ -38,6 +38,8 @@ func (crdb *CRDBase) AutoMigrate(ctx context.Context, models ...any) error {
 		return fmt.Errorf("unable to generate crds: %w", err)
 	}
 
+	// crdb.addToSchemes(crds)
+
 	if err := crdb.installCRDs(ctx, crds); err != nil {
 		return fmt.Errorf("unable to install crds: %w", err)
 	}
@@ -67,6 +69,19 @@ func (crdb *CRDBase) generateCRDs(models []any) ([]*apiextv1.CustomResourceDefin
 
 	return crds, nil
 }
+
+// func (crdb *CRDBase) addToSchemes(crds []*apiextv1.CustomResourceDefinition) {
+// 	sch := crdb.Manager.GetScheme()
+
+// 	for _, crd := range crds {
+// 		gv := schema.GroupVersion{
+// 			Group:   crd.Spec.Group,
+// 			Version: crd.Spec.Versions[0].Name,
+// 		}
+// 		schemeBuilder := &scheme.Builder{GroupVersion: gv}
+// 		schemeBuilder.AddToScheme(sch)
+// 	}
+// }
 
 func (crdb *CRDBase) getNamesByCRDs(crds []*apiextv1.CustomResourceDefinition) []apiextv1.CustomResourceDefinitionNames {
 	namess := []apiextv1.CustomResourceDefinitionNames{}

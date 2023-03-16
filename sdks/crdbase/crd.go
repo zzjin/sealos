@@ -20,6 +20,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+var (
+	xPreserveUnknownFields = true
+)
+
 // NewCustomResourceDefinition returns a new CRD object.
 func (crdb *CRDBase) NewCustomResourceDefinition(
 	names apiextv1.CustomResourceDefinitionNames,
@@ -48,9 +52,10 @@ func (crdb *CRDBase) NewCustomResourceDefinition(
 					Storage: true,
 					Schema: &apiextv1.CustomResourceValidation{
 						OpenAPIV3Schema: &apiextv1.JSONSchemaProps{
-							Description: "Auto Generated schema for: " + names.Kind,
-							Type:        "object",
-							Properties:  schema,
+							Description:            "Auto Generated schema for: " + names.Kind,
+							Type:                   "object",
+							Properties:             schema,
+							XPreserveUnknownFields: &xPreserveUnknownFields,
 						},
 					},
 					Subresources: &apiextv1.CustomResourceSubresources{
@@ -59,7 +64,7 @@ func (crdb *CRDBase) NewCustomResourceDefinition(
 					// AdditionalPrinterColumns: []apiextv1.CustomResourceColumnDefinition{},
 				},
 			},
-			PreserveUnknownFields: true,
+			// PreserveUnknownFields: true,
 		},
 	}
 }
