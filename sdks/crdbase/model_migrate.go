@@ -53,6 +53,8 @@ func (crdb *CRDBase) AutoMigrate(ctx context.Context, models ...any) error {
 		return fmt.Errorf("unable to apply rbac: %w", err)
 	}
 
+	// TODO: add indexes
+
 	return nil
 }
 

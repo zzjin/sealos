@@ -28,7 +28,8 @@ type BaseConstructor interface {
 
 type BaseWriter interface {
 	Create(ctx context.Context, model any) (string, controllerutil.OperationResult, error)
-	CreateOrUpdate(ctx context.Context, model any) (string, controllerutil.OperationResult, error)
+	CreateOrUpdate(ctx context.Context, model any, uf UpdateFunc) (string, controllerutil.OperationResult, error)
+	CreateOrUpdateList(ctx context.Context, model any, uf UpdateFunc) ([]string, controllerutil.OperationResult, error)
 
 	Delete(ctx context.Context, name string) error
 	DeleteAllOf(ctx context.Context, query query.Query) error

@@ -22,6 +22,7 @@ import (
 	"k8s.io/apimachinery/pkg/conversion/queryparams"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // Query is the query object for transforming a url query to api-server list call.
@@ -84,10 +85,10 @@ func Parse(query string) (*Query, error) {
 // Validate ensure all query parameters are valid
 func (q *Query) Validate() error {
 	if q.Page < 0 {
-		return errors.New("Pagination must be greater than 0")
+		return errors.New("pagination must be greater than 0")
 	}
 	if q.Limit < 0 || q.Limit > 1000 {
-		return errors.New("Pagination must be greater than 0")
+		return errors.New("limit must be greater than 0")
 	}
 
 	return nil
@@ -98,4 +99,14 @@ func (q *Query) String() string {
 	// nosemgrep
 	obj, _ := queryparams.Convert(q)
 	return obj.Encode()
+}
+
+func (q *Query) ToListOptions() []client.ListOption {
+	// TODO: Impl.
+	return []client.ListOption{client.MatchingFields{}}
+}
+
+func (q *Query) PostFilter(data any) any {
+	// TODO: Impl.
+	return data
 }

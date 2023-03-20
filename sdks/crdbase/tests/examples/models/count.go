@@ -23,18 +23,24 @@ func (ct CountType) String() string {
 
 type Count struct {
 	Name      string    `json:"name" crdb:"name,primaryKey"`
-	CountType CountType `json:"type" crdb:"name,index"`
+	CountType CountType `json:"type" crdb:"type,index"`
 	Counter   int64     `json:"count"`
 }
 
-func (c *Count) Add(ctx context.Context, db *crdb.CRDBase, name string, countType CountType, step int) (int64, error) {
+func (c *Count) Add(ctx context.Context, db *crdb.CRDBase, name string, countType CountType, step int64) (int64, error) {
 	data := &Count{
 		Name:      name,
 		CountType: countType,
-		Counter:   1,
+		Counter:   step,
 	}
 
-	if _, _, err := db.Model(c).CreateOrUpdate(ctx, data); err != nil {
+	onUpdate := func(data crdb.Model) crdb.Model {
+		dataObj := data.(*Count)
+		dataObj.Counter += step
+		return dataObj
+	}
+
+	if _, _, err := db.Model(c).CreateOrUpdate(ctx, data, onUpdate); err != nil {
 		return 0, err
 	}
 

@@ -17,6 +17,7 @@ package crdb
 import (
 	"context"
 	"fmt"
+	"reflect"
 
 	"github.com/labring/crdbase/query"
 	"github.com/labring/crdbase/utils"
@@ -24,7 +25,6 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/kustomize/kyaml/yaml"
 )
@@ -35,6 +35,9 @@ type CRDModelAction struct {
 
 	gvk schema.GroupVersionKind
 }
+
+// FIXME: real Impl.
+type UpdateFunc func(cr Model) Model
 
 func (crdb CRDBase) Model(m Model) CRDModelAction {
 	mSchema := GetCRDModelSchema(m)
@@ -69,7 +72,11 @@ func (crdms CRDModelAction) Create(ctx context.Context, model any) (string, cont
 	return uniqName, controllerutil.OperationResultCreated, nil
 }
 
-func (crdms CRDModelAction) CreateOrUpdate(ctx context.Context, model any) (string, controllerutil.OperationResult, error) {
+func (crdms CRDModelAction) CreateOrUpdate(ctx context.Context, model any, um UpdateFunc) (string, controllerutil.OperationResult, error) {
+	if reflect.TypeOf(model).Kind() == reflect.Slice {
+		return "", controllerutil.OperationResultNone, fmt.Errorf("model must be a pointer to a struct, not slice")
+	}
+
 	uniqName := crdms.GetPrimaryFieldValue(model)
 	if uniqName == "" {
 		return crdms.Create(ctx, model)
@@ -94,11 +101,23 @@ func (crdms CRDModelAction) CreateOrUpdate(ctx context.Context, model any) (stri
 	}
 
 	cr.SetResourceVersion(getCR.GetResourceVersion())
-	if err := crdms.client.Update(ctx, cr); err != nil {
+
+	// TODO: transfer data to model and back to unstructured.
+	updatedCR := &unstructured.Unstructured{}
+
+	if err := crdms.client.Update(ctx, updatedCR); err != nil {
 		return "", controllerutil.OperationResultNone, err
 	}
 
 	return uniqName, controllerutil.OperationResultUpdated, nil
+}
+
+func (crdms CRDModelAction) CreateOrUpdateList(ctx context.Context, model any, um UpdateFunc) (string, controllerutil.OperationResult, error) {
+	if reflect.TypeOf(model).Kind() != reflect.Slice {
+		return "", controllerutil.OperationResultNone, fmt.Errorf("model must be a pointer to a struct, not slice")
+	}
+
+	return "", controllerutil.OperationResultNone, nil
 }
 
 func (crdms CRDModelAction) model2UnstructuredCR(name string, m Model) (*unstructured.Unstructured, error) {
@@ -158,16 +177,19 @@ func (crdms CRDModelAction) DeleteAllOf(ctx context.Context, query query.Query) 
 	return nil
 }
 
-func (crdms CRDModelAction) Get(ctx context.Context, query query.Query, out any) error {
-	//TODO: real options
-	opt := client.MatchingFields{}
+func (crdms CRDModelAction) Get(ctx context.Context, q query.Query, out any) error {
+	// TODO: real options
+	opts := q.ToListOptions()
 
 	gotList := crdms.NewGetUnstructuredList()
 
-	err := crdms.client.List(ctx, gotList, opt)
+	err := crdms.client.List(ctx, gotList, opts...)
 	if err != nil {
 		return err
 	}
+
+	// TODO: Always filter response by query
+	q.PostFilter(gotList)
 
 	if len(gotList.Items) == 0 {
 		return nil
