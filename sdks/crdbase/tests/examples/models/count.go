@@ -27,27 +27,7 @@ type Count struct {
 	Counter   int64     `json:"count"`
 }
 
-func (c *Count) Add(ctx context.Context, db *crdb.CRDBase, name string, countType CountType, step int64) (int64, error) {
-	data := &Count{
-		Name:      name,
-		CountType: countType,
-		Counter:   step,
-	}
-
-	onUpdate := func(data crdb.Model) crdb.Model {
-		dataObj := data.(*Count)
-		dataObj.Counter += step
-		return dataObj
-	}
-
-	if _, _, err := db.Model(c).CreateOrUpdate(ctx, data, onUpdate); err != nil {
-		return 0, err
-	}
-
-	return data.Counter, nil
-}
-
-func (c *Count) Get(db *crdb.CRDBase, name string, countType CountType) (int64, error) {
+func (c *Count) Get(db *crdb.CrdBase, name string, countType CountType) (int64, error) {
 	ret := &Count{}
 
 	q := query.Query{

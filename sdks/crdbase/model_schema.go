@@ -17,29 +17,31 @@ package crdb
 import (
 	"fmt"
 	"reflect"
-	"sync"
 
 	"github.com/labring/crdbase/utils"
+
+	"golang.org/x/sync/singleflight"
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 )
 
-type CRDModelSchema struct {
+type ModelSchema struct {
 	ID           string
-	Names        apiextv1.CustomResourceDefinitionNames
-	Spec         map[string]apiextv1.JSONSchemaProps
 	PrimaryField string
-	Indexes      [][]string
+
+	Indexes [][]string
+
+	Names apiextv1.CustomResourceDefinitionNames
+	Spec  map[string]apiextv1.JSONSchemaProps
 }
 
 var (
-	modelSchemaMap = map[string]*CRDModelSchema{}
-	mLock          sync.Mutex
+	modelSchemaGroup = singleflight.Group{}
 )
 
-func GetCRDModelsSchemas(models ...Model) []*CRDModelSchema {
-	ret := []*CRDModelSchema{}
+func GetCrdModelsSchemas(models ...Model) []*ModelSchema {
+	var ret []*ModelSchema
 	for _, m := range models {
-		schema := GetCRDModelSchema(m)
+		schema := GetCrdModelSchema(m)
 		if !schema.IsEmpty() {
 			ret = append(ret, schema)
 		}
@@ -47,39 +49,28 @@ func GetCRDModelsSchemas(models ...Model) []*CRDModelSchema {
 	return ret
 }
 
-func GetCRDModelSchema(m Model) *CRDModelSchema {
-	emptyObj := &CRDModelSchema{
-		ID:           "",
-		Names:        apiextv1.CustomResourceDefinitionNames{},
-		Spec:         map[string]apiextv1.JSONSchemaProps{},
-		PrimaryField: "",
-		Indexes:      [][]string{},
-	}
-
-	id := utils.GetStructID(m)
-	if id == "" {
-		return emptyObj
-	}
-
-	mLock.Lock()
-	defer mLock.Unlock()
-
-	if ret, ok := modelSchemaMap[id]; ok {
-		return ret
-	}
-
-	obj, err := newCRDModelSchema(id, m)
-	if err != nil {
-		return emptyObj
-	}
-
-	modelSchemaMap[id] = obj
-
-	return obj
+func GetCrdModelSchema(m Model) *ModelSchema {
+	// use struct id as key
+	res, _, _ := modelSchemaGroup.Do(utils.GetStructID(m), func() (interface{}, error) {
+		obj, err := newCrdModelSchema(m)
+		if err != nil {
+			return &ModelSchema{}, err
+		}
+		return obj, nil
+	})
+	return res.(*ModelSchema)
 }
 
-func newCRDModelSchema(id string, m Model) (*CRDModelSchema, error) {
+// newCrdModelSchema
+func newCrdModelSchema(m Model) (*ModelSchema, error) {
 	names := Model2KindName(m)
+
+	// use struct id as key, model should be struct or a struct pointer
+	id := utils.GetStructID(m)
+	if id == "" {
+		return nil, fmt.Errorf("model %s id is empty", names.Kind)
+	}
+
 	crdJSONSchema := utils.Struct2JSONSchemaProps(m)
 
 	fields, tags, err := utils.ParseFieldsTagsByStruct(m, crdbaseTagKey)
@@ -87,36 +78,30 @@ func newCRDModelSchema(id string, m Model) (*CRDModelSchema, error) {
 		return nil, err
 	}
 
-	primaryField := ""
-	indexes := [][]string{}
+	var primaryField string
+	var indexes [][]string
+
 	for name, tag := range tags {
 		if tag == nil {
 			continue
 		}
-
 		for _, opt := range tag.Options {
 			field, ok := fields[name]
 			if !ok {
 				return nil, fmt.Errorf("field %s not found", field.Name)
 			}
-
 			if opt == "primaryKey" {
 				if primaryField != "" {
 					return nil, fmt.Errorf("duplicate primary field %s and %s", primaryField, field.Name)
 				}
-
 				if field.Type.Kind() != reflect.String {
 					return nil, fmt.Errorf("primary field %s must be string", field.Name)
 				}
-
 				primaryField = field.Name
-
 				// primary ~= index
 				indexes = append(indexes, []string{field.Name})
-
 				break
 			}
-
 			if opt == "index" {
 				indexes = append(indexes, []string{field.Name})
 				continue
@@ -124,7 +109,7 @@ func newCRDModelSchema(id string, m Model) (*CRDModelSchema, error) {
 		}
 	}
 
-	return &CRDModelSchema{
+	return &ModelSchema{
 		ID:           id,
 		Names:        names,
 		Spec:         crdJSONSchema,
@@ -133,25 +118,26 @@ func newCRDModelSchema(id string, m Model) (*CRDModelSchema, error) {
 	}, nil
 }
 
-func (crdms *CRDModelSchema) IsEmpty() bool {
-	return (crdms.Names.Plural == "" || crdms.Names.Singular == "") || len(crdms.Spec) == 0
+func (ms *ModelSchema) IsEmpty() bool {
+	return (ms.Names.Plural == "" || ms.Names.Singular == "") || len(ms.Spec) == 0
 }
 
-func (crdms *CRDModelSchema) ResourceName() string {
-	return crdms.Names.Plural
+func (ms *ModelSchema) ResourceName() string {
+	return ms.Names.Plural
 }
 
-func (crdms *CRDModelSchema) Kind() string {
-	return crdms.Names.Kind
+func (ms *ModelSchema) Kind() string {
+	return ms.Names.Kind
 }
 
-func (crdms *CRDModelSchema) GetPrimaryFieldValue(m Model) string {
-	if crdms.PrimaryField != "" {
+// GetPrimaryFieldValue get primary field value from a model
+func (ms *ModelSchema) GetPrimaryFieldValue(m Model) string {
+	if ms.PrimaryField != "" {
 		v := reflect.ValueOf(m)
 		if v.Kind() == reflect.Ptr {
 			v = v.Elem()
 		}
-		v = v.FieldByName(crdms.PrimaryField)
+		v = v.FieldByName(ms.PrimaryField)
 		if v.Kind() == reflect.Ptr {
 			v = v.Elem()
 		}

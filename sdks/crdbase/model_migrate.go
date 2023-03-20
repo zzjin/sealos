@@ -32,7 +32,7 @@ import (
 )
 
 // AutoMigrate auto apply crd(s) to spec models
-func (crdb *CRDBase) AutoMigrate(ctx context.Context, models ...any) error {
+func (crdb *CrdBase) AutoMigrate(ctx context.Context, models ...any) error {
 	crds, err := crdb.generateCRDs(models)
 	if err != nil {
 		return fmt.Errorf("unable to generate crds: %w", err)
@@ -58,8 +58,8 @@ func (crdb *CRDBase) AutoMigrate(ctx context.Context, models ...any) error {
 	return nil
 }
 
-func (crdb *CRDBase) generateCRDs(models []any) ([]*apiextv1.CustomResourceDefinition, error) {
-	crds := []*apiextv1.CustomResourceDefinition{}
+func (crdb *CrdBase) generateCRDs(models []any) ([]*apiextv1.CustomResourceDefinition, error) {
+	var crds []*apiextv1.CustomResourceDefinition
 
 	for _, model := range models {
 		crd, err := crdb.Model2CRD(model)
@@ -72,7 +72,7 @@ func (crdb *CRDBase) generateCRDs(models []any) ([]*apiextv1.CustomResourceDefin
 	return crds, nil
 }
 
-// func (crdb *CRDBase) addToSchemes(crds []*apiextv1.CustomResourceDefinition) {
+// func (crdb *CrdBase) addToSchemes(crds []*apiextv1.CustomResourceDefinition) {
 // 	sch := crdb.Manager.GetScheme()
 
 // 	for _, crd := range crds {
@@ -85,8 +85,8 @@ func (crdb *CRDBase) generateCRDs(models []any) ([]*apiextv1.CustomResourceDefin
 // 	}
 // }
 
-func (crdb *CRDBase) getNamesByCRDs(crds []*apiextv1.CustomResourceDefinition) []apiextv1.CustomResourceDefinitionNames {
-	namess := []apiextv1.CustomResourceDefinitionNames{}
+func (crdb *CrdBase) getNamesByCRDs(crds []*apiextv1.CustomResourceDefinition) []apiextv1.CustomResourceDefinitionNames {
+	var namess []apiextv1.CustomResourceDefinitionNames
 
 	for _, crd := range crds {
 		namess = append(namess, crd.Spec.Names)
@@ -96,7 +96,7 @@ func (crdb *CRDBase) getNamesByCRDs(crds []*apiextv1.CustomResourceDefinition) [
 }
 
 // Prune Delete all crd(s) from spec models along with all the stored crs
-func (crdb *CRDBase) Prune(ctx context.Context, models ...any) error {
+func (crdb *CrdBase) Prune(ctx context.Context, models ...any) error {
 	crds, err := crdb.generateCRDs(models)
 	if err != nil {
 		return fmt.Errorf("unable to generate crds: %w", err)
@@ -114,7 +114,7 @@ func (crdb *CRDBase) Prune(ctx context.Context, models ...any) error {
 	return nil
 }
 
-func (crdb *CRDBase) installCRDs(ctx context.Context, crds []*apiextv1.CustomResourceDefinition) error {
+func (crdb *CrdBase) installCRDs(ctx context.Context, crds []*apiextv1.CustomResourceDefinition) error {
 	for _, crd := range crds {
 		crdb.log.V(1).Info("installing CRD", "crd", crd.GetName())
 		existingCrd := crd.DeepCopy()
@@ -192,7 +192,7 @@ func (p *poller) poll() (done bool, err error) {
 	return allFound, nil
 }
 
-func (crdb *CRDBase) waitCRDs(ctx context.Context, crds []*apiextv1.CustomResourceDefinition) error {
+func (crdb *CrdBase) waitCRDs(ctx context.Context, crds []*apiextv1.CustomResourceDefinition) error {
 	// Add each CRD to a map of GroupVersion to Resource
 	waitingFor := map[schema.GroupVersion]*sets.String{}
 	for _, crd := range crds {
@@ -219,7 +219,7 @@ func (crdb *CRDBase) waitCRDs(ctx context.Context, crds []*apiextv1.CustomResour
 	return wait.PollImmediate(PollInterval, MaxWait, p.poll)
 }
 
-func (crdb *CRDBase) deleteCRDs(ctx context.Context, crds []*apiextv1.CustomResourceDefinition) error {
+func (crdb *CrdBase) deleteCRDs(ctx context.Context, crds []*apiextv1.CustomResourceDefinition) error {
 	// Uninstall each CRD
 	for _, crd := range crds {
 		crd := crd
@@ -235,7 +235,7 @@ func (crdb *CRDBase) deleteCRDs(ctx context.Context, crds []*apiextv1.CustomReso
 	return nil
 }
 
-func (crdb *CRDBase) applyRBAC(ctx context.Context, namess []apiextv1.CustomResourceDefinitionNames) error {
+func (crdb *CrdBase) applyRBAC(ctx context.Context, namess []apiextv1.CustomResourceDefinitionNames) error {
 	var err error
 
 	roleClient := crdb.clientSet.RbacV1().Roles(crdb.Namespace)
@@ -284,7 +284,7 @@ func (crdb *CRDBase) applyRBAC(ctx context.Context, namess []apiextv1.CustomReso
 	return nil
 }
 
-func (crdb *CRDBase) deleteRBAC(ctx context.Context, namess []apiextv1.CustomResourceDefinitionNames) error {
+func (crdb *CrdBase) deleteRBAC(ctx context.Context, namess []apiextv1.CustomResourceDefinitionNames) error {
 	roleClient := crdb.clientSet.RbacV1().Roles(crdb.Namespace)
 	roleBidingClient := crdb.clientSet.RbacV1().RoleBindings(crdb.Namespace)
 

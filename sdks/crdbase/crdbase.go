@@ -15,8 +15,6 @@
 package crdb
 
 import (
-	"errors"
-
 	"github.com/go-logr/logr"
 	"github.com/labring/crdbase/utils"
 	appsv1 "k8s.io/api/apps/v1"
@@ -24,8 +22,8 @@ import (
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes"
-	pkg_client "sigs.k8s.io/controller-runtime/pkg/client"
-	pkg_manager "sigs.k8s.io/controller-runtime/pkg/manager"
+	pkgclient "sigs.k8s.io/controller-runtime/pkg/client"
+	pkgmanager "sigs.k8s.io/controller-runtime/pkg/manager"
 )
 
 const (
@@ -38,31 +36,27 @@ const (
 	crdbaseTagKey = "crdb"
 )
 
-var (
-	ErrNotFound = errors.New("notFound")
-)
-
-type CRDBaseConfig struct {
-	Manager        pkg_manager.Manager
+type CrdBaseConfig struct {
+	Manager        pkgmanager.Manager
 	GroupVersion   schema.GroupVersion
 	ServiceAccount string
 	Namespace      string
 }
 
-type CRDBase struct {
-	CRDBaseConfig
+type CrdBase struct {
+	CrdBaseConfig
 
 	log logr.Logger
 
-	client    pkg_client.Client     // client
+	client    pkgclient.Client      // client
 	clientSet *kubernetes.Clientset // raw client set
 	// dynamicClient dynamic.Interface     // dynamic client
 }
 
-// NewCRDBase create a new crd base object for future use
-func NewCRDBase(conf CRDBaseConfig, log ...logr.Logger) (*CRDBase, error) {
-	ret := &CRDBase{
-		CRDBaseConfig: conf,
+// NewCrdBase create a new crd base object for future use
+func NewCrdBase(conf CrdBaseConfig, log ...logr.Logger) (*CrdBase, error) {
+	ret := &CrdBase{
+		CrdBaseConfig: conf,
 	}
 
 	if len(log) > 0 {
@@ -102,7 +96,7 @@ func NewCRDBase(conf CRDBaseConfig, log ...logr.Logger) (*CRDBase, error) {
 	return ret, nil
 }
 
-func (crdb *CRDBase) initScheme() error {
+func (crdb *CrdBase) initScheme() error {
 	sch := crdb.Manager.GetScheme()
 
 	if err := rbacv1.AddToScheme(sch); err != nil {
@@ -120,11 +114,11 @@ func (crdb *CRDBase) initScheme() error {
 	return nil
 }
 
-func (crdb *CRDBase) Clone() *CRDBase {
+func (crdb *CrdBase) Clone() *CrdBase {
 	return crdb
 }
 
-// func (crdb *CRDBase) NewClient() (pkg_client.Client, error) {
+// func (crdb *CrdBase) NewClient() (pkg_client.Client, error) {
 // 	client, err := pkg_client.New(crdb.Manager.GetConfig(), pkg_client.Options{})
 // 	if err != nil {
 // 		return nil, err
@@ -133,3 +127,7 @@ func (crdb *CRDBase) Clone() *CRDBase {
 
 // 	return client, nil
 // }
+
+func (crdb *CrdBaseConfig) ApiVersion() string {
+	return crdb.GroupVersion.Group + "/" + crdApiVersion
+}

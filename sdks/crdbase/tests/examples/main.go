@@ -86,7 +86,7 @@ func main() {
 	// }
 	// fmt.Println(node.Items)
 
-	conf := crdb.CRDBaseConfig{
+	conf := crdb.CrdBaseConfig{
 		Manager: mgr,
 		GroupVersion: schema.GroupVersion{
 			Group:   "test.sealos.io",
@@ -96,7 +96,7 @@ func main() {
 		Namespace:      "crdb-test",
 	}
 
-	db, err := crdb.NewCRDBase(conf, setupLog)
+	db, err := crdb.NewCrdBase(conf, setupLog)
 	if err != nil {
 		panic(err)
 	}
@@ -106,10 +106,12 @@ func main() {
 	}
 
 	dbCount := &models.Count{}
-
-	got, err := dbCount.Add(ctx, db, "user1", models.DownloadCount, 1)
+	update, c, err := db.Model(models.Count{}).CreateOrUpdate(ctx, dbCount, func() error {
+		dbCount.Counter++
+		return nil
+	})
 	if err != nil {
-		fmt.Println(err)
+		return
 	}
-	fmt.Println(got)
+	fmt.Println(update, c)
 }

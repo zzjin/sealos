@@ -25,8 +25,46 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+type operator int
+
+const (
+	lessThan operator = iota + 1
+	lessEq
+	equal
+	greaterEq
+	greaterThan
+	in
+	notIn
+	notEqual
+
+	keyFieldName = "__key__"
+)
+
+// filter is a conditional filter on query results.
+type filter struct {
+	FieldName string
+	Op        operator
+	Value     interface{}
+}
+
+type sortDirection bool
+
+const (
+	ascending  sortDirection = false
+	descending sortDirection = true
+)
+
+// order is a sort order on query results.
+type order struct {
+	FieldName string
+	Direction sortDirection
+}
+
 // Query is the query object for transforming a url query to api-server list call.
 type Query struct {
+	filter []filter
+	order  []order
+
 	// Pagination
 	// Page  stands for the page number, default to 1 (start from 1)
 	Page int `json:"page,omitempty"`
@@ -103,6 +141,9 @@ func (q *Query) String() string {
 
 func (q *Query) ToListOptions() []client.ListOption {
 	// TODO: Impl.
+	sel := labels.NewSelector()
+	sel.Add(q.LabelSelectors...)
+
 	return []client.ListOption{client.MatchingFields{}}
 }
 

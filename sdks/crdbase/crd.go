@@ -25,7 +25,7 @@ var (
 )
 
 // NewCustomResourceDefinition returns a new CRD object.
-func (crdb *CRDBase) NewCustomResourceDefinition(
+func (crdb *CrdBase) NewCustomResourceDefinition(
 	names apiextv1.CustomResourceDefinitionNames,
 	schema map[string]apiextv1.JSONSchemaProps,
 ) *apiextv1.CustomResourceDefinition {
@@ -70,7 +70,7 @@ func (crdb *CRDBase) NewCustomResourceDefinition(
 }
 
 // NewRBACRolesAndBindings return roles and its bindings.
-func (crdb *CRDBase) NewRBACRolesAndBindings(
+func (crdb *CrdBase) NewRBACRolesAndBindings(
 	names apiextv1.CustomResourceDefinitionNames,
 ) ([]*rbacv1.Role, []*rbacv1.RoleBinding) {
 	managerRole := &rbacv1.Role{

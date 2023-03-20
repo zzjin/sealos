@@ -23,7 +23,7 @@ import (
 )
 
 // GuessShortName guesses the short name of the given name.
-func NewTestCRDBase() *CRDBase {
+func NewTestCRDBase() *CrdBase {
 	opts := zap.Options{
 		Development: true,
 	}
@@ -34,7 +34,7 @@ func NewTestCRDBase() *CRDBase {
 	// TODO: add fake or test client config
 	var mgr manager.Manager
 
-	conf := CRDBaseConfig{
+	conf := CrdBaseConfig{
 		Manager: mgr,
 		GroupVersion: schema.GroupVersion{
 			Group:   "test.crdb.sealos.io",
@@ -44,7 +44,7 @@ func NewTestCRDBase() *CRDBase {
 		Namespace:      "sealos-test",
 	}
 
-	crdbase, _ := NewCRDBase(conf, testLogger)
+	crdbase, _ := NewCrdBase(conf, testLogger)
 
 	return crdbase
 }

@@ -25,94 +25,114 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/kustomize/kyaml/yaml"
 )
 
-type CRDModelAction struct {
-	CRDBase
-	CRDModelSchema
+type ModelAction struct {
+	CrdBase
+	ModelSchema
 
 	gvk schema.GroupVersionKind
 }
 
-// FIXME: real Impl.
-type UpdateFunc func(cr Model) Model
+// MutateFn is a function which mutates the existing object into its desired state.
+type MutateFn func() error
 
-func (crdb CRDBase) Model(m Model) CRDModelAction {
-	mSchema := GetCRDModelSchema(m)
+// mutate wraps a MutateFn and applies validation to its result.
+func mutate(f MutateFn, key client.ObjectKey, obj client.Object) error {
+	if err := f(); err != nil {
+		return err
+	}
+	if newKey := client.ObjectKeyFromObject(obj); key != newKey {
+		return fmt.Errorf("MutateFn cannot mutate object name and/or object namespace")
+	}
+	return nil
+}
 
-	return CRDModelAction{
-		CRDBase:        crdb,
-		CRDModelSchema: *mSchema,
+func (crdb *CrdBase) Model(m Model) *ModelAction {
+	modelSchema := GetCrdModelSchema(m)
+
+	return &ModelAction{
+		CrdBase:     *crdb,
+		ModelSchema: *modelSchema,
 
 		gvk: schema.GroupVersionKind{
 			Group:   crdb.GroupVersion.Group,
 			Version: crdb.GroupVersion.Version,
-			Kind:    mSchema.Kind(),
+			Kind:    modelSchema.Kind(),
 		},
 	}
 }
 
-func (crdms CRDModelAction) Create(ctx context.Context, model any) (string, controllerutil.OperationResult, error) {
-	uniqName := crdms.GetPrimaryFieldValue(model)
-	if uniqName == "" {
-		uniqName = utils.GenNanoID()
-	}
-
-	// Unstructured For create CR
-	cr, err := crdms.model2UnstructuredCR(uniqName, model)
-	if err != nil {
-		return "", controllerutil.OperationResultNone, err
-	}
-
-	if err := crdms.client.Create(ctx, cr); err != nil {
-		return "", controllerutil.OperationResultNone, err
-	}
-	return uniqName, controllerutil.OperationResultCreated, nil
+func (ma *ModelAction) NamespacedName(name string) types.NamespacedName {
+	return types.NamespacedName{Namespace: ma.Namespace, Name: name}
 }
 
-func (crdms CRDModelAction) CreateOrUpdate(ctx context.Context, model any, um UpdateFunc) (string, controllerutil.OperationResult, error) {
-	if reflect.TypeOf(model).Kind() == reflect.Slice {
-		return "", controllerutil.OperationResultNone, fmt.Errorf("model must be a pointer to a struct, not slice")
+func (ma *ModelAction) NewUnstructured() *unstructured.Unstructured {
+	un := &unstructured.Unstructured{}
+	un.SetGroupVersionKind(ma.gvk)
+	return un
+}
+
+func (ma *ModelAction) NewUnstructuredList() *unstructured.UnstructuredList {
+	unl := &unstructured.UnstructuredList{}
+	unl.SetGroupVersionKind(ma.gvk)
+	return unl
+}
+
+func (ma *ModelAction) Create(ctx context.Context, data Data) (string, controllerutil.OperationResult, error) {
+	// Unstructured to create CR
+	cr, err := ma.data2UnstructuredCR(data)
+	if err != nil {
+		return "", controllerutil.OperationResultNone, err
+	}
+	if err := ma.client.Create(ctx, cr); err != nil {
+		return "", controllerutil.OperationResultNone, err
+	}
+	return cr.GetName(), controllerutil.OperationResultCreated, nil
+}
+
+func (ma *ModelAction) CreateOrUpdate(ctx context.Context, data Data, f MutateFn) (string, controllerutil.OperationResult, error) {
+	if reflect.TypeOf(data).Kind() == reflect.Slice {
+		return "", controllerutil.OperationResultNone, fmt.Errorf("data must be a pointer to a struct, not slice")
 	}
 
-	uniqName := crdms.GetPrimaryFieldValue(model)
-	if uniqName == "" {
-		return crdms.Create(ctx, model)
-	}
-
-	// Unstructured For create CR
-	cr, err := crdms.model2UnstructuredCR(uniqName, model)
+	// Unstructured to create CR
+	obj, err := ma.data2UnstructuredCR(data)
 	if err != nil {
 		return "", controllerutil.OperationResultNone, err
 	}
 
-	getCR := crdms.NewGetUnstructured()
-
-	if err := crdms.client.Get(ctx, crdms.NamespacedName(uniqName), getCR); err != nil {
+	if err := ma.client.Get(ctx, ma.NamespacedName(obj.GetName()), obj); err != nil {
 		if !apierrors.IsNotFound(err) {
 			return "", controllerutil.OperationResultNone, err
 		}
-		if err := crdms.client.Create(ctx, cr); err != nil {
+		if err := mutate(f, ma.NamespacedName(obj.GetName()), obj); err != nil {
 			return "", controllerutil.OperationResultNone, err
 		}
-		return uniqName, controllerutil.OperationResultCreated, nil
+		if err := ma.client.Create(ctx, obj); err != nil {
+			return "", controllerutil.OperationResultNone, err
+		}
+		return obj.GetName(), controllerutil.OperationResultCreated, nil
 	}
 
-	cr.SetResourceVersion(getCR.GetResourceVersion())
+	// TODO FIX this!
 
-	// TODO: transfer data to model and back to unstructured.
+	obj.SetResourceVersion(obj.GetResourceVersion())
+
+	// TODO: transfer data to data and back to unstructured.
 	updatedCR := &unstructured.Unstructured{}
 
-	if err := crdms.client.Update(ctx, updatedCR); err != nil {
+	if err := ma.client.Update(ctx, updatedCR); err != nil {
 		return "", controllerutil.OperationResultNone, err
 	}
 
-	return uniqName, controllerutil.OperationResultUpdated, nil
+	return obj.GetName(), controllerutil.OperationResultUpdated, nil
 }
 
-func (crdms CRDModelAction) CreateOrUpdateList(ctx context.Context, model any, um UpdateFunc) (string, controllerutil.OperationResult, error) {
+func (ma *ModelAction) CreateOrUpdateList(ctx context.Context, model any, f MutateFn) (string, controllerutil.OperationResult, error) {
 	if reflect.TypeOf(model).Kind() != reflect.Slice {
 		return "", controllerutil.OperationResultNone, fmt.Errorf("model must be a pointer to a struct, not slice")
 	}
@@ -120,70 +140,26 @@ func (crdms CRDModelAction) CreateOrUpdateList(ctx context.Context, model any, u
 	return "", controllerutil.OperationResultNone, nil
 }
 
-func (crdms CRDModelAction) model2UnstructuredCR(name string, m Model) (*unstructured.Unstructured, error) {
-	modelMap, err := utils.StructJSON2Map(m)
-	if err != nil {
-		return nil, fmt.Errorf("convert model to Unstructured fail: %w", err)
-	}
-
-	// Unstructured For create CR
-	mcr := &unstructured.Unstructured{
-		Object: map[string]any{
-			"apiVersion": crdms.ApiVersion(),
-			"kind":       crdms.Names.Kind,
-			"metadata": map[string]any{
-				"name":      name,
-				"namespace": crdms.Namespace,
-				// "labels": map[string]any{
-				// 	crdBaseURL + "/managed-by": providerName,
-				// },
-			},
-			"spec": modelMap,
-		},
-	}
-
-	y, _ := yaml.Marshal(mcr)
-	crdms.log.V(1).Info("model2UnstructuredCR", "unstructured", string(y))
-
-	return mcr, nil
-}
-
-func (crdms CRDModelAction) NamespacedName(name string) types.NamespacedName {
-	return types.NamespacedName{Namespace: crdms.Namespace, Name: name}
-}
-
-func (crdms CRDModelAction) NewGetUnstructured() *unstructured.Unstructured {
-	un := &unstructured.Unstructured{}
-	un.SetGroupVersionKind(crdms.gvk)
-	return un
-}
-
-func (crdms CRDModelAction) NewGetUnstructuredList() *unstructured.UnstructuredList {
-	unl := &unstructured.UnstructuredList{}
-	unl.SetGroupVersionKind(crdms.gvk)
-	return unl
-}
-
 // Delete deletes the given object by name from datastore.
-func (crdms CRDModelAction) Delete(ctx context.Context, name string) error {
-	deleteObj := crdms.NewGetUnstructured()
-	deleteObj.SetNamespace(crdms.Namespace)
+func (ma *ModelAction) Delete(ctx context.Context, name string) error {
+	deleteObj := ma.NewUnstructured()
+	deleteObj.SetNamespace(ma.Namespace)
 	deleteObj.SetName(name)
 
-	return crdms.client.Delete(ctx, deleteObj)
+	return ma.client.Delete(ctx, deleteObj)
 }
 
-func (crdms CRDModelAction) DeleteAllOf(ctx context.Context, query query.Query) error {
+func (ma *ModelAction) DeleteAllOf(ctx context.Context, query query.Query) error {
 	return nil
 }
 
-func (crdms CRDModelAction) Get(ctx context.Context, q query.Query, out any) error {
+func (ma *ModelAction) Get(ctx context.Context, q query.Query, out any) error {
 	// TODO: real options
 	opts := q.ToListOptions()
 
-	gotList := crdms.NewGetUnstructuredList()
+	gotList := ma.NewUnstructuredList()
 
-	err := crdms.client.List(ctx, gotList, opts...)
+	err := ma.client.List(ctx, gotList, opts...)
 	if err != nil {
 		return err
 	}
@@ -202,12 +178,50 @@ func (crdms CRDModelAction) Get(ctx context.Context, q query.Query, out any) err
 	}
 
 	return nil
-
 }
-func (crdms CRDModelAction) List(ctx context.Context, query query.Query, out any) error {
+
+func (ma *ModelAction) List(ctx context.Context, query query.Query, out any) error {
 	if _, _, err := utils.EnsureStructSlice(out); err != nil {
 		return fmt.Errorf("out must be a slice to struct")
 	}
 
 	return nil
+}
+
+func (ma *ModelAction) ListAll() {
+}
+
+func (ma *ModelAction) data2UnstructuredCR(data Data) (*unstructured.Unstructured, error) {
+	name := ma.GetPrimaryFieldValue(data)
+	if name == "" && ma.PrimaryField != "" {
+		return nil, fmt.Errorf("data2UnstructuredCR error: primary field %s has been setted, but value is empty", ma.PrimaryField)
+	} else {
+		name = utils.GenNanoID()
+	}
+
+	modelMap, err := utils.StructJSON2Map(data)
+	if err != nil {
+		return nil, fmt.Errorf("data2UnstructuredCR error: convert model to Unstructured fail: %w", err)
+	}
+
+	// Unstructured For create CR
+	mcr := &unstructured.Unstructured{
+		Object: map[string]any{
+			"apiVersion": ma.ApiVersion(),
+			"kind":       ma.Names.Kind,
+			"metadata": map[string]any{
+				"name":      name,
+				"namespace": ma.Namespace,
+				//"labels": map[string]any{
+				//	crdBaseURL + "/managed-by": providerName,
+				//},
+			},
+			"spec": modelMap,
+		},
+	}
+
+	y, _ := yaml.Marshal(mcr)
+	ma.log.V(1).Info("data2UnstructuredCR", "unstructured", string(y))
+
+	return mcr, nil
 }
