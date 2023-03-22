@@ -165,3 +165,10 @@ func Struct2JSONSchema(in any) *jsonschema.Schema {
 	reflect := &jsonschema.Reflector{DoNotReference: true, ExpandedStruct: true}
 	return reflect.Reflect(in)
 }
+
+func IsList(in any) bool {
+	if _, _, err := EnsureStructSlice(in); err != nil {
+		return false
+	}
+	return true
+}

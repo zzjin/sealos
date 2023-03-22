@@ -196,7 +196,7 @@ func (crdb *CrdBase) waitCRDs(ctx context.Context, crds []*apiextv1.CustomResour
 	// Add each CRD to a map of GroupVersion to Resource
 	waitingFor := map[schema.GroupVersion]*sets.String{}
 	for _, crd := range crds {
-		gvs := []schema.GroupVersion{}
+		var gvs []schema.GroupVersion
 		for _, version := range crd.Spec.Versions {
 			if version.Served {
 				gvs = append(gvs, schema.GroupVersion{Group: crd.Spec.Group, Version: version.Name})

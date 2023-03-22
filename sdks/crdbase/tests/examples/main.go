@@ -7,9 +7,11 @@ import (
 	"os"
 
 	crdb "github.com/labring/crdbase"
+	"github.com/labring/crdbase/query"
 	"github.com/labring/crdbase/tests/examples/models"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/selection"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -114,4 +116,30 @@ func main() {
 		return
 	}
 	fmt.Println(update, c)
+	q := query.Query{
+		Kind: "",
+		Filter: []query.Filter{
+			{
+				Operator: selection.GreaterThan,
+				Field:    "count",
+				Value:    "10",
+			},
+		},
+
+		Order: []query.Order{
+			{
+				FieldName: "",
+				Direction: false,
+			},
+		},
+
+		Distinct:   false,
+		DistinctOn: nil,
+		Page:       0,
+		Limit:      0,
+	}
+	err = db.Model(models.Count{}).Get(ctx, q, dbCount)
+	if err != nil {
+		return
+	}
 }

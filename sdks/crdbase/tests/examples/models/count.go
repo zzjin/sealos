@@ -6,8 +6,6 @@ import (
 
 	crdb "github.com/labring/crdbase"
 	"github.com/labring/crdbase/query"
-	"k8s.io/apimachinery/pkg/fields"
-	"k8s.io/apimachinery/pkg/selection"
 )
 
 type CountType int
@@ -28,26 +26,7 @@ type Count struct {
 }
 
 func (c *Count) Get(db *crdb.CrdBase, name string, countType CountType) (int64, error) {
-	ret := &Count{}
-
-	q := query.Query{
-		FieldSelectors: fields.Requirements{
-			{
-				Field:    ".spec.name",
-				Value:    name,
-				Operator: selection.Equals,
-			},
-			{
-				Field:    ".spec.type",
-				Value:    countType.String(),
-				Operator: selection.Equals,
-			},
-		},
-	}
-
-	if err := db.Model(c).Get(context.TODO(), q, &ret); err != nil {
-		return 0, err
-	}
-
+	q := query.Query{}
+	res, _ := db.Model(c).Get(context.Background(), q)
 	return 0, nil
 }

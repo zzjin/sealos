@@ -17,6 +17,7 @@ package crdb
 import (
 	"github.com/go-logr/logr"
 	"github.com/labring/crdbase/utils"
+	"github.com/labring/sealos/controllers/user/controllers/cache"
 	appsv1 "k8s.io/api/apps/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -51,6 +52,8 @@ type CrdBase struct {
 	client    pkgclient.Client      // client
 	clientSet *kubernetes.Clientset // raw client set
 	// dynamicClient dynamic.Interface     // dynamic client
+
+	cache cache.Cache
 }
 
 // NewCrdBase create a new crd base object for future use

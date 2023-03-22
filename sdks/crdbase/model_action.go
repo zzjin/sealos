@@ -21,10 +21,13 @@ import (
 
 	"github.com/labring/crdbase/query"
 	"github.com/labring/crdbase/utils"
+	"k8s.io/apimachinery/pkg/selection"
+
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/kustomize/kyaml/yaml"
@@ -35,20 +38,6 @@ type ModelAction struct {
 	ModelSchema
 
 	gvk schema.GroupVersionKind
-}
-
-// MutateFn is a function which mutates the existing object into its desired state.
-type MutateFn func() error
-
-// mutate wraps a MutateFn and applies validation to its result.
-func mutate(f MutateFn, key client.ObjectKey, obj client.Object) error {
-	if err := f(); err != nil {
-		return err
-	}
-	if newKey := client.ObjectKeyFromObject(obj); key != newKey {
-		return fmt.Errorf("MutateFn cannot mutate object name and/or object namespace")
-	}
-	return nil
 }
 
 func (crdb *CrdBase) Model(m Model) *ModelAction {
@@ -64,6 +53,20 @@ func (crdb *CrdBase) Model(m Model) *ModelAction {
 			Kind:    modelSchema.Kind(),
 		},
 	}
+}
+
+// MutateFn is a function which mutates the existing object into its desired state.
+type MutateFn func() error
+
+// mutate wraps a MutateFn and applies validation to its result.
+func mutate(f MutateFn, key client.ObjectKey, obj client.Object) error {
+	if err := f(); err != nil {
+		return err
+	}
+	if newKey := client.ObjectKeyFromObject(obj); key != newKey {
+		return fmt.Errorf("MutateFn cannot mutate object name and/or object namespace")
+	}
+	return nil
 }
 
 func (ma *ModelAction) NamespacedName(name string) types.NamespacedName {
@@ -84,7 +87,7 @@ func (ma *ModelAction) NewUnstructuredList() *unstructured.UnstructuredList {
 
 func (ma *ModelAction) Create(ctx context.Context, data Data) (string, controllerutil.OperationResult, error) {
 	// Unstructured to create CR
-	cr, err := ma.data2UnstructuredCR(data)
+	cr, err := ma.Data2Unstructured(data)
 	if err != nil {
 		return "", controllerutil.OperationResultNone, err
 	}
@@ -100,7 +103,7 @@ func (ma *ModelAction) CreateOrUpdate(ctx context.Context, data Data, f MutateFn
 	}
 
 	// Unstructured to create CR
-	obj, err := ma.data2UnstructuredCR(data)
+	obj, err := ma.Data2Unstructured(data)
 	if err != nil {
 		return "", controllerutil.OperationResultNone, err
 	}
@@ -153,55 +156,45 @@ func (ma *ModelAction) DeleteAllOf(ctx context.Context, query query.Query) error
 	return nil
 }
 
-func (ma *ModelAction) Get(ctx context.Context, q query.Query, out any) error {
-	// TODO: real options
-	opts := q.ToListOptions()
+func (ma *ModelAction) Get(ctx context.Context, q query.Query, data Data) error {
+	opts := q.GenListOptions()
 
-	gotList := ma.NewUnstructuredList()
+	dirty := ma.NewUnstructuredList()
+	if err := ma.client.List(ctx, dirty, opts...); err != nil {
+		return err
+	}
 
-	err := ma.client.List(ctx, gotList, opts...)
+	res, err := ma.doQuery(dirty, q)
 	if err != nil {
 		return err
 	}
 
-	// TODO: Always filter response by query
-	q.PostFilter(gotList)
-
-	if len(gotList.Items) == 0 {
-		return nil
+	if !utils.IsList(data) {
+		if res.Items == nil || len(res.Items) == 0 {
+			return fmt.Errorf("no result found")
+		}
+		if err := ma.Unstructured2Data(&res.Items[0], data); err != nil {
+			return fmt.Errorf("failed to convert map to struct: %w", err)
+		}
+	} else {
+		if err := ma.UnstructuredList2DataList(res, data.([]Data)); err != nil {
+			return fmt.Errorf("failed to convert map to struct: %w", err)
+		}
 	}
-
-	got := gotList.Items[0]
-
-	if err := utils.Map2JSONStruct(got.UnstructuredContent(), &out); err != nil {
-		return fmt.Errorf("failed to convert map to struct: %w", err)
-	}
-
 	return nil
 }
 
-func (ma *ModelAction) List(ctx context.Context, query query.Query, out any) error {
-	if _, _, err := utils.EnsureStructSlice(out); err != nil {
-		return fmt.Errorf("out must be a slice to struct")
-	}
-
-	return nil
-}
-
-func (ma *ModelAction) ListAll() {
-}
-
-func (ma *ModelAction) data2UnstructuredCR(data Data) (*unstructured.Unstructured, error) {
+func (ma *ModelAction) Data2Unstructured(data Data) (*unstructured.Unstructured, error) {
 	name := ma.GetPrimaryFieldValue(data)
 	if name == "" && ma.PrimaryField != "" {
-		return nil, fmt.Errorf("data2UnstructuredCR error: primary field %s has been setted, but value is empty", ma.PrimaryField)
+		return nil, fmt.Errorf("Data2Unstructured error: primary field %s has been setted, but value is empty", ma.PrimaryField)
 	} else {
 		name = utils.GenNanoID()
 	}
 
 	modelMap, err := utils.StructJSON2Map(data)
 	if err != nil {
-		return nil, fmt.Errorf("data2UnstructuredCR error: convert model to Unstructured fail: %w", err)
+		return nil, fmt.Errorf("Data2Unstructured error: convert model to Unstructured fail: %w", err)
 	}
 
 	// Unstructured For create CR
@@ -221,7 +214,100 @@ func (ma *ModelAction) data2UnstructuredCR(data Data) (*unstructured.Unstructure
 	}
 
 	y, _ := yaml.Marshal(mcr)
-	ma.log.V(1).Info("data2UnstructuredCR", "unstructured", string(y))
+	ma.log.V(1).Info("Data2Unstructured", "unstructured", string(y))
 
 	return mcr, nil
+}
+
+// Unstructured2Data draft impl. FIXME!!
+func (ma *ModelAction) Unstructured2Data(u *unstructured.Unstructured, data Data) error {
+	if err := utils.Map2JSONStruct(u.UnstructuredContent(), &data); err != nil {
+		return fmt.Errorf("failed to convert map to struct: %w", err)
+	}
+	return nil
+}
+
+// UnstructuredList2DataList draft impl. FIXME!!
+func (ma *ModelAction) UnstructuredList2DataList(ul *unstructured.UnstructuredList, datas []Data) error {
+	for _, u := range ul.Items {
+		var data Data
+		if err := utils.Map2JSONStruct(u.UnstructuredContent(), &data); err != nil {
+			return fmt.Errorf("failed to convert map to struct: %w", err)
+		}
+		datas = append(datas, data)
+	}
+	return nil
+}
+
+// genListOptions returns a list of ListOptions based on the given query.
+func (ma *ModelAction) genListOptions(q query.Query) []client.ListOption {
+	var opts []client.ListOption
+	for _, f := range q.Filter {
+		switch f.Operator {
+		// TODO: IMPL.
+		}
+	}
+	return opts
+}
+
+func (ma *ModelAction) doQuery(in *unstructured.UnstructuredList, q query.Query) (*unstructured.UnstructuredList, error) {
+	res := in.DeepCopy()
+	pipeline := ma.getDoQueryPipeLine()
+	for _, f := range pipeline {
+		var err error
+		res, err = f(res, q)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
+}
+
+func (ma *ModelAction) getDoQueryPipeLine() []func(list *unstructured.UnstructuredList, q query.Query) (*unstructured.UnstructuredList, error) {
+	return []func(list *unstructured.UnstructuredList, q query.Query) (*unstructured.UnstructuredList, error){
+		ma.doFilter,
+		ma.doSort,
+		ma.doDistinct,
+		ma.doPagination,
+	}
+}
+
+func (ma *ModelAction) doFilter(in *unstructured.UnstructuredList, q query.Query) (*unstructured.UnstructuredList, error) {
+	res := ma.NewUnstructuredList()
+	for _, item := range in.Items {
+		// TODO do filters in q.filter
+		isMatch := true
+		for _, f := range q.Filter {
+			content, err := utils.GetValueFormUnstructuredContent(item.UnstructuredContent(), fmt.Sprintf("spec.%s", f.Field))
+			if err != nil {
+				return ma.NewUnstructuredList(), err
+			}
+			switch f.Operator {
+			case selection.Equals:
+				// TODO impl.
+				if content != f.Value {
+					isMatch = false
+				}
+			}
+		}
+		if isMatch {
+			res.Items = append(res.Items, item)
+		}
+	}
+	return res, nil
+}
+
+func (ma *ModelAction) doSort(in *unstructured.UnstructuredList, q query.Query) (*unstructured.UnstructuredList, error) {
+	// TODO impl.
+	return in, nil
+}
+
+func (ma *ModelAction) doPagination(in *unstructured.UnstructuredList, q query.Query) (*unstructured.UnstructuredList, error) {
+	// TODO impl.
+	return in, nil
+}
+
+func (ma *ModelAction) doDistinct(in *unstructured.UnstructuredList, q query.Query) (*unstructured.UnstructuredList, error) {
+	// TODO impl.
+	return in, nil
 }
