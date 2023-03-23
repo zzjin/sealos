@@ -16,6 +16,8 @@ package utils
 
 import (
 	"testing"
+
+	"github.com/jaevor/go-nanoid"
 )
 
 // GuessShortName guesses the short name of the given name.
@@ -35,6 +37,39 @@ func TestGuessShortName(t *testing.T) {
 		gotStr := GuessShortNames(test.testStr)
 		if test.wantStr != gotStr {
 			t.Errorf("%s differ (-got, +want): %s %s", test.testStr, gotStr, test.wantStr)
+		}
+	}
+}
+
+func TestGenNanoID(t *testing.T) {
+	m := map[string]struct{}{}
+
+	for i := 0; i < 1000; i++ {
+		id := GenNanoID()
+		if _, ok := m[id]; ok || id == "" {
+			t.Errorf("nano id duplicated: %s", id)
+		} else {
+			m[id] = struct{}{}
+		}
+	}
+}
+
+func BenchmarkSonyFlakeID(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		idInt, _ := sf.NextID()
+
+		id := enc58.Encode(idInt)
+		if id == "" {
+			b.FailNow()
+		}
+	}
+}
+func BenchmarkNanoID(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		idFunc, _ := nanoid.Standard(12)
+		id := idFunc()
+		if id == "" {
+			b.FailNow()
 		}
 	}
 }
