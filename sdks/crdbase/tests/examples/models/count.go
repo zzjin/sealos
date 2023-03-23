@@ -1,11 +1,9 @@
 package models
 
 import (
-	"context"
 	"strconv"
 
 	crdb "github.com/labring/crdbase"
-	"github.com/labring/crdbase/query"
 )
 
 type CountType int
@@ -26,7 +24,5 @@ type Count struct {
 }
 
 func (c *Count) Get(db *crdb.CrdBase, name string, countType CountType) (int64, error) {
-	q := query.Query{}
-	res, _ := db.Model(c).Get(context.Background(), q)
 	return 0, nil
 }

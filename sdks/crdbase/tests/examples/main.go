@@ -107,11 +107,17 @@ func main() {
 		setupLog.V(1).Info("unable to auto migrate", "error", err)
 	}
 
-	dbCount := &models.Count{}
+	dbCount := &models.Count{
+		Name:      "labring/affine",
+		CountType: models.DownloadCount,
+		Counter:   12,
+	}
+
 	update, c, err := db.Model(models.Count{}).CreateOrUpdate(ctx, dbCount, func() error {
 		dbCount.Counter++
 		return nil
 	})
+
 	if err != nil {
 		return
 	}
@@ -125,18 +131,11 @@ func main() {
 				Value:    "10",
 			},
 		},
-
-		Order: []query.Order{
-			{
-				FieldName: "",
-				Direction: false,
-			},
-		},
-
+		Order:      []query.Order{},
 		Distinct:   false,
 		DistinctOn: nil,
-		Page:       0,
-		Limit:      0,
+		Page:       1,
+		Limit:      10,
 	}
 	err = db.Model(models.Count{}).Get(ctx, q, dbCount)
 	if err != nil {

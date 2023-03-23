@@ -23,7 +23,6 @@ import (
 	"github.com/labring/crdbase/utils"
 	"k8s.io/apimachinery/pkg/selection"
 
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
@@ -108,43 +107,28 @@ func (ma *ModelAction) CreateOrUpdate(ctx context.Context, data Data, f MutateFn
 		return "", controllerutil.OperationResultNone, err
 	}
 
-	if err := ma.client.Get(ctx, ma.NamespacedName(obj.GetName()), obj); err != nil {
-		if !apierrors.IsNotFound(err) {
-			return "", controllerutil.OperationResultNone, err
-		}
-		if err := mutate(f, ma.NamespacedName(obj.GetName()), obj); err != nil {
-			return "", controllerutil.OperationResultNone, err
-		}
-		if err := ma.client.Create(ctx, obj); err != nil {
-			return "", controllerutil.OperationResultNone, err
-		}
-		return obj.GetName(), controllerutil.OperationResultCreated, nil
+	// TODO impl. add retry and test
+	update, err := controllerutil.CreateOrUpdate(ctx, ma.client, obj, func() error {
+		return f()
+	})
+	if err != nil {
+		return "", update, err
 	}
-
-	// TODO FIX this!
-
-	obj.SetResourceVersion(obj.GetResourceVersion())
-
-	// TODO: transfer data to data and back to unstructured.
-	updatedCR := &unstructured.Unstructured{}
-
-	if err := ma.client.Update(ctx, updatedCR); err != nil {
-		return "", controllerutil.OperationResultNone, err
-	}
-
-	return obj.GetName(), controllerutil.OperationResultUpdated, nil
+	return obj.GetName(), update, nil
 }
 
 func (ma *ModelAction) CreateOrUpdateList(ctx context.Context, model any, f MutateFn) (string, controllerutil.OperationResult, error) {
 	if reflect.TypeOf(model).Kind() != reflect.Slice {
 		return "", controllerutil.OperationResultNone, fmt.Errorf("model must be a pointer to a struct, not slice")
 	}
+	// TODO impl. add handle logic and test
 
 	return "", controllerutil.OperationResultNone, nil
 }
 
 // Delete deletes the given object by name from datastore.
 func (ma *ModelAction) Delete(ctx context.Context, name string) error {
+	// TODO add test
 	deleteObj := ma.NewUnstructured()
 	deleteObj.SetNamespace(ma.Namespace)
 	deleteObj.SetName(name)
@@ -153,22 +137,27 @@ func (ma *ModelAction) Delete(ctx context.Context, name string) error {
 }
 
 func (ma *ModelAction) DeleteAllOf(ctx context.Context, query query.Query) error {
+	// TODO impl. add handle logic and test
 	return nil
 }
 
 func (ma *ModelAction) Get(ctx context.Context, q query.Query, data Data) error {
+	// use query to get list options
 	opts := q.GenListOptions()
 
+	// get all objects using list
 	dirty := ma.NewUnstructuredList()
 	if err := ma.client.List(ctx, dirty, opts...); err != nil {
 		return err
 	}
 
+	// do query
 	res, err := ma.doQuery(dirty, q)
 	if err != nil {
 		return err
 	}
 
+	// if data is not a list, then return the first item
 	if !utils.IsList(data) {
 		if res.Items == nil || len(res.Items) == 0 {
 			return fmt.Errorf("no result found")
@@ -219,7 +208,7 @@ func (ma *ModelAction) Data2Unstructured(data Data) (*unstructured.Unstructured,
 	return mcr, nil
 }
 
-// Unstructured2Data draft impl. FIXME!!
+// Unstructured2Data draft impl. TODO: review and test this!
 func (ma *ModelAction) Unstructured2Data(u *unstructured.Unstructured, data Data) error {
 	if err := utils.Map2JSONStruct(u.UnstructuredContent(), &data); err != nil {
 		return fmt.Errorf("failed to convert map to struct: %w", err)
@@ -227,7 +216,7 @@ func (ma *ModelAction) Unstructured2Data(u *unstructured.Unstructured, data Data
 	return nil
 }
 
-// UnstructuredList2DataList draft impl. FIXME!!
+// UnstructuredList2DataList draft impl. TODO: review and test this!
 func (ma *ModelAction) UnstructuredList2DataList(ul *unstructured.UnstructuredList, datas []Data) error {
 	for _, u := range ul.Items {
 		var data Data
@@ -237,17 +226,6 @@ func (ma *ModelAction) UnstructuredList2DataList(ul *unstructured.UnstructuredLi
 		datas = append(datas, data)
 	}
 	return nil
-}
-
-// genListOptions returns a list of ListOptions based on the given query.
-func (ma *ModelAction) genListOptions(q query.Query) []client.ListOption {
-	var opts []client.ListOption
-	for _, f := range q.Filter {
-		switch f.Operator {
-		// TODO: IMPL.
-		}
-	}
-	return opts
 }
 
 func (ma *ModelAction) doQuery(in *unstructured.UnstructuredList, q query.Query) (*unstructured.UnstructuredList, error) {
@@ -302,12 +280,12 @@ func (ma *ModelAction) doSort(in *unstructured.UnstructuredList, q query.Query) 
 	return in, nil
 }
 
-func (ma *ModelAction) doPagination(in *unstructured.UnstructuredList, q query.Query) (*unstructured.UnstructuredList, error) {
+func (ma *ModelAction) doDistinct(in *unstructured.UnstructuredList, q query.Query) (*unstructured.UnstructuredList, error) {
 	// TODO impl.
 	return in, nil
 }
 
-func (ma *ModelAction) doDistinct(in *unstructured.UnstructuredList, q query.Query) (*unstructured.UnstructuredList, error) {
+func (ma *ModelAction) doPagination(in *unstructured.UnstructuredList, q query.Query) (*unstructured.UnstructuredList, error) {
 	// TODO impl.
 	return in, nil
 }
