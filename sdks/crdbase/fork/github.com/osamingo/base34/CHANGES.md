@@ -1,0 +1,1 @@
+Forked from  https://github.com/osamingo/base58 to remove uppercase alphabetic character.

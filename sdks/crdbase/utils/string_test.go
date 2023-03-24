@@ -15,6 +15,7 @@
 package utils
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/jaevor/go-nanoid"
@@ -54,11 +55,20 @@ func TestGenNanoID(t *testing.T) {
 	}
 }
 
+func TestGenNanoIDRFC1123(t *testing.T) {
+	for i := 0; i < 10000000; i++ {
+		id := GenNanoID()
+		if id != "" && id[0] >= 30 && id[0] <= 39 {
+			fmt.Printf("not spec: %s\n", id)
+		}
+	}
+}
+
 func BenchmarkSonyFlakeID(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		idInt, _ := sf.NextID()
 
-		id := enc58.Encode(idInt)
+		id := enc34.Encode(idInt)
 		if id == "" {
 			b.FailNow()
 		}

@@ -186,12 +186,10 @@ require (
 	go.starlark.net v0.0.0-20200306205701-8dd3e2ee1dd5 // indirect
 	go.uber.org/atomic v1.10.0 // indirect
 	go.uber.org/multierr v1.8.0 // indirect
-	golang.org/x/mod v0.6.0-dev.0.20220419223038-86c51ed26bb4 // indirect
 	golang.org/x/net v0.3.1-0.20221206200815-1e63c2f08a10 // indirect
 	golang.org/x/oauth2 v0.0.0-20221014153046-6fdb5e3db783 // indirect
 	golang.org/x/text v0.5.0 // indirect
 	golang.org/x/time v0.0.0-20220722155302-e5dcc9cfc0b9 // indirect
-	golang.org/x/tools v0.1.12 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.2.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/genproto v0.0.0-20221024183307-1bc688fe9f3e // indirect
@@ -204,11 +202,9 @@ require (
 	k8s.io/apiserver v0.25.6 // indirect
 	k8s.io/cli-runtime v0.25.6 // indirect
 	k8s.io/cluster-bootstrap v0.25.6 // indirect
-	k8s.io/code-generator v0.26.3 // indirect
 	k8s.io/component-base v0.25.6 // indirect
 	k8s.io/component-helpers v0.25.6 // indirect
 	k8s.io/cri-api v0.25.6 // indirect
-	k8s.io/gengo v0.0.0-20211129171323-c02415ce4185 // indirect
 	k8s.io/klog/v2 v2.70.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20220803164354-a70c9af30aea // indirect
 	oras.land/oras-go v1.2.0 // indirect

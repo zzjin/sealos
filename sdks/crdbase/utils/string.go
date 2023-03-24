@@ -20,9 +20,8 @@ import (
 	"time"
 
 	"github.com/jaevor/go-nanoid"
-	"github.com/osamingo/base58"
+	"github.com/labring/crdbase/fork/github.com/osamingo/base34"
 	"github.com/sony/sonyflake"
-	"k8s.io/apimachinery/pkg/util/rand"
 )
 
 const (
@@ -37,7 +36,7 @@ var (
 
 var (
 	sf    *sonyflake.Sonyflake
-	enc58 *base58.Encoder
+	enc34 *base34.Encoder
 )
 
 func init() {
@@ -53,7 +52,7 @@ func init() {
 	}
 
 	// use standard base58 to ensure shortest string id
-	enc58, _ = base58.NewEncoder(base58.StandardSource)
+	enc34, _ = base34.NewEncoder(base34.StandardSource)
 }
 
 // GuessShortNames guesses the short name of the given name.
@@ -69,20 +68,20 @@ func GuessShortNames(name string) string {
 	return ret.String()
 }
 
-const alphabet = "abcdefghijklmnopqrstuvwxyz"
+const alphabet = "123456789abcdefghijkmnopqrstuvwxyz"
 
 // GenNanoID generates a short-term unique id, with timestamp order.
 // When sonyflake returns error(witch almost never happen), return real random string.
-// @Note: All random string must follow [RFC 1035 Label Names](https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#:~:text=contain%20no%20more%20than%20253%20characters)
+// @Note: All random string must follow [RFC 1123 Label Names](https://kubernetes.io/docs/concepts/overview/working-with-objects/names/)
 func GenNanoID() string {
 	id, err := sf.NextID()
 	if err != nil {
 		// over the max speed, using another time method?
 		// Use the go-nanoid package to generate a custom nanoid with length
-		randID, _ := nanoid.Custom(alphabet, 12)
+		randID, _ := nanoid.Custom(alphabet, 16)
 		return randID()
 
 	}
 
-	return enc58.Encode(id)
+	return enc34.Encode(id)
 }
