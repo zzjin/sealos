@@ -59,7 +59,7 @@ func (crdb *CRDBase) AutoMigrate(ctx context.Context, models ...any) error {
 }
 
 func (crdb *CRDBase) generateCRDs(models []any) ([]*apiextv1.CustomResourceDefinition, error) {
-	crds := []*apiextv1.CustomResourceDefinition{}
+	var crds []*apiextv1.CustomResourceDefinition
 
 	for _, model := range models {
 		crd, err := crdb.Model2CRD(model)
@@ -86,7 +86,7 @@ func (crdb *CRDBase) generateCRDs(models []any) ([]*apiextv1.CustomResourceDefin
 // }
 
 func (crdb *CRDBase) getNamesByCRDs(crds []*apiextv1.CustomResourceDefinition) []apiextv1.CustomResourceDefinitionNames {
-	namess := []apiextv1.CustomResourceDefinitionNames{}
+	var namess []apiextv1.CustomResourceDefinitionNames
 
 	for _, crd := range crds {
 		namess = append(namess, crd.Spec.Names)
@@ -117,8 +117,8 @@ func (crdb *CRDBase) Prune(ctx context.Context, models ...any) error {
 func (crdb *CRDBase) installCRDs(ctx context.Context, crds []*apiextv1.CustomResourceDefinition) error {
 	for _, crd := range crds {
 		crdb.log.V(1).Info("installing CRD", "crd", crd.GetName())
-		existingCrd := crd.DeepCopy()
-		errGet := crdb.client.Get(ctx, client.ObjectKey{Name: crd.GetName()}, existingCrd)
+		existingCRD := crd.DeepCopy()
+		errGet := crdb.client.Get(ctx, client.ObjectKey{Name: crd.GetName()}, existingCRD)
 		switch {
 		case apierrors.IsNotFound(errGet):
 			if err := crdb.client.Create(ctx, crd); err != nil {
@@ -129,10 +129,10 @@ func (crdb *CRDBase) installCRDs(ctx context.Context, crds []*apiextv1.CustomRes
 		default:
 			crdb.log.V(1).Info("CRD already exists, updating", "crd", crd.GetName())
 			if err := retry.RetryOnConflict(retry.DefaultBackoff, func() error {
-				if err := crdb.client.Get(ctx, client.ObjectKey{Name: crd.GetName()}, existingCrd); err != nil {
+				if err := crdb.client.Get(ctx, client.ObjectKey{Name: crd.GetName()}, existingCRD); err != nil {
 					return err
 				}
-				crd.SetResourceVersion(existingCrd.GetResourceVersion())
+				crd.SetResourceVersion(existingCRD.GetResourceVersion())
 				return crdb.client.Update(ctx, crd)
 			}); err != nil {
 				return err
@@ -196,7 +196,7 @@ func (crdb *CRDBase) waitCRDs(ctx context.Context, crds []*apiextv1.CustomResour
 	// Add each CRD to a map of GroupVersion to Resource
 	waitingFor := map[schema.GroupVersion]*sets.String{}
 	for _, crd := range crds {
-		gvs := []schema.GroupVersion{}
+		var gvs []schema.GroupVersion
 		for _, version := range crd.Spec.Versions {
 			if version.Served {
 				gvs = append(gvs, schema.GroupVersion{Group: crd.Spec.Group, Version: version.Name})

@@ -22,12 +22,13 @@ import (
 )
 
 type Model any
+type Data any
 
-type IModelKindName interface {
+type ModelKindNameInterface interface {
 	KindName() string
 }
 
-// Model2CRDUnstructured parse model and convert it to crd struct to apply
+// Model2CRD Unstructured parse model and convert it to crd struct to apply
 func (crdb *CRDBase) Model2CRD(m Model) (*apiextv1.CustomResourceDefinition, error) {
 	schema := GetCRDModelSchema(m)
 
@@ -45,13 +46,9 @@ func (crdb *CRDBase) Model2CRD(m Model) (*apiextv1.CustomResourceDefinition, err
 	return crdb.NewCustomResourceDefinition(schema.Names, crdJSONSchema), nil
 }
 
-func (crdb *CRDBase) ApiVersion() string {
-	return crdb.GroupVersion.Group + "/" + crdApiVersion
-}
-
 func Model2KindName(m Model) apiextv1.CustomResourceDefinitionNames {
 	var name string
-	if mn, ok := m.(IModelKindName); ok {
+	if mn, ok := m.(ModelKindNameInterface); ok {
 		name = mn.KindName()
 	} else {
 		name = utils.GetStructName(m)

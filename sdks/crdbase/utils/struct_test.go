@@ -14,7 +14,9 @@
 
 package utils
 
-import "testing"
+import (
+	"testing"
+)
 
 func TestGetStructName(t *testing.T) {
 	type tStruct struct{}
@@ -55,5 +57,72 @@ func TestGetStructID(t *testing.T) {
 		if test.wantStr != gotStr {
 			t.Errorf("%s differ (-got, +want): %s %s", test.testStr, gotStr, test.wantStr)
 		}
+	}
+}
+
+func TestEnsureStructSlice(t *testing.T) {
+	type test struct {
+		k int
+		v string
+	}
+	type args struct {
+		v interface{}
+	}
+	tests := []struct {
+		name string
+		args args
+		want bool
+	}{
+		{
+			name: "1",
+			args: args{
+				v: []int{1, 2, 3},
+			},
+			want: true,
+		},
+		{
+			name: "2",
+			args: args{
+				v: &[]string{"1", "2", "3"},
+			},
+			want: true,
+		},
+		{
+			name: "3",
+			args: args{
+				v: &test{
+					k: 0,
+					v: "1",
+				},
+			},
+			want: false,
+		},
+		{
+			name: "3",
+			args: args{
+				v: test{
+					k: 0,
+					v: "1",
+				},
+			},
+			want: false,
+		},
+		{
+			name: "4",
+			args: args{
+				v: []test{
+					{k: 0, v: "0"},
+					{k: 1, v: "1"},
+				},
+			},
+			want: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := EnsureStructSlice(tt.args.v); got != tt.want {
+				t.Errorf("EnsureStructSlice() = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }

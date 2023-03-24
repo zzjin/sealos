@@ -7,6 +7,7 @@ import (
 	"os"
 
 	crdb "github.com/labring/crdbase"
+	"github.com/labring/crdbase/query"
 	"github.com/labring/crdbase/tests/examples/models"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -105,11 +106,35 @@ func main() {
 		setupLog.V(1).Info("unable to auto migrate", "error", err)
 	}
 
-	dbCount := &models.Count{}
+	dbCount := &models.Count{
+		Name:      "labring-affine",
+		CountType: models.DownloadCount,
+		Counter:   237,
+	}
 
-	got, err := dbCount.Add(ctx, db, "user1", models.DownloadCount, 1)
+	action := db.Model(models.Count{})
+
+	//update, c, err := action.UpdateWithMutator(ctx, dbCount, func() error {
+	//	dbCount.Counter += 1
+	//	return nil
+	//})
+
+	update, c, err := action.Update(ctx, dbCount)
 	if err != nil {
 		fmt.Println(err)
+		return
 	}
-	fmt.Println(got)
+
+	fmt.Println(update, c)
+
+	q := query.Query{}
+
+	//var res []models.Count
+	//err = db.Model(models.Count{}).Get(ctx, q, &res)
+	//fmt.Println(res, err)
+
+	var res models.Count
+	err = db.Model(models.Count{}).Get(ctx, q, &res)
+	fmt.Println(res, err)
+	return
 }

@@ -15,17 +15,16 @@
 package crdb
 
 import (
-	"errors"
-
 	"github.com/go-logr/logr"
 	"github.com/labring/crdbase/utils"
+	"github.com/labring/sealos/controllers/user/controllers/cache"
 	appsv1 "k8s.io/api/apps/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes"
-	pkg_client "sigs.k8s.io/controller-runtime/pkg/client"
-	pkg_manager "sigs.k8s.io/controller-runtime/pkg/manager"
+	pkgclient "sigs.k8s.io/controller-runtime/pkg/client"
+	pkgmanager "sigs.k8s.io/controller-runtime/pkg/manager"
 )
 
 const (
@@ -35,15 +34,11 @@ const (
 
 	crdApiVersion = "v1"
 
-	crdbaseTagKey = "crdb"
-)
-
-var (
-	ErrNotFound = errors.New("notFound")
+	crdBaseTagKey = "crdb"
 )
 
 type CRDBaseConfig struct {
-	Manager        pkg_manager.Manager
+	Manager        pkgmanager.Manager
 	GroupVersion   schema.GroupVersion
 	ServiceAccount string
 	Namespace      string
@@ -54,9 +49,11 @@ type CRDBase struct {
 
 	log logr.Logger
 
-	client    pkg_client.Client     // client
+	client    pkgclient.Client      // client
 	clientSet *kubernetes.Clientset // raw client set
 	// dynamicClient dynamic.Interface     // dynamic client
+
+	cache cache.Cache
 }
 
 // NewCRDBase create a new crd base object for future use
@@ -133,3 +130,7 @@ func (crdb *CRDBase) Clone() *CRDBase {
 
 // 	return client, nil
 // }
+
+func (crdb *CRDBaseConfig) ApiVersion() string {
+	return crdb.GroupVersion.Group + "/" + crdApiVersion
+}
