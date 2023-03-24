@@ -34,18 +34,18 @@ const (
 
 	crdApiVersion = "v1"
 
-	crdbaseTagKey = "crdb"
+	crdBaseTagKey = "crdb"
 )
 
-type CrdBaseConfig struct {
+type CRDBaseConfig struct {
 	Manager        pkgmanager.Manager
 	GroupVersion   schema.GroupVersion
 	ServiceAccount string
 	Namespace      string
 }
 
-type CrdBase struct {
-	CrdBaseConfig
+type CRDBase struct {
+	CRDBaseConfig
 
 	log logr.Logger
 
@@ -56,10 +56,10 @@ type CrdBase struct {
 	cache cache.Cache
 }
 
-// NewCrdBase create a new crd base object for future use
-func NewCrdBase(conf CrdBaseConfig, log ...logr.Logger) (*CrdBase, error) {
-	ret := &CrdBase{
-		CrdBaseConfig: conf,
+// NewCRDBase create a new crd base object for future use
+func NewCRDBase(conf CRDBaseConfig, log ...logr.Logger) (*CRDBase, error) {
+	ret := &CRDBase{
+		CRDBaseConfig: conf,
 	}
 
 	if len(log) > 0 {
@@ -99,7 +99,7 @@ func NewCrdBase(conf CrdBaseConfig, log ...logr.Logger) (*CrdBase, error) {
 	return ret, nil
 }
 
-func (crdb *CrdBase) initScheme() error {
+func (crdb *CRDBase) initScheme() error {
 	sch := crdb.Manager.GetScheme()
 
 	if err := rbacv1.AddToScheme(sch); err != nil {
@@ -117,11 +117,11 @@ func (crdb *CrdBase) initScheme() error {
 	return nil
 }
 
-func (crdb *CrdBase) Clone() *CrdBase {
+func (crdb *CRDBase) Clone() *CRDBase {
 	return crdb
 }
 
-// func (crdb *CrdBase) NewClient() (pkg_client.Client, error) {
+// func (crdb *CRDBase) NewClient() (pkg_client.Client, error) {
 // 	client, err := pkg_client.New(crdb.Manager.GetConfig(), pkg_client.Options{})
 // 	if err != nil {
 // 		return nil, err
@@ -131,6 +131,6 @@ func (crdb *CrdBase) Clone() *CrdBase {
 // 	return client, nil
 // }
 
-func (crdb *CrdBaseConfig) ApiVersion() string {
+func (crdb *CRDBaseConfig) ApiVersion() string {
 	return crdb.GroupVersion.Group + "/" + crdApiVersion
 }

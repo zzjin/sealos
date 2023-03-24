@@ -29,8 +29,8 @@ type ModelKindNameInterface interface {
 }
 
 // Model2CRD Unstructured parse model and convert it to crd struct to apply
-func (crdb *CrdBase) Model2CRD(m Model) (*apiextv1.CustomResourceDefinition, error) {
-	schema := GetCrdModelSchema(m)
+func (crdb *CRDBase) Model2CRD(m Model) (*apiextv1.CustomResourceDefinition, error) {
+	schema := GetCRDModelSchema(m)
 
 	if schema.IsEmpty() {
 		return nil, errors.New("model cannot converted to crd")

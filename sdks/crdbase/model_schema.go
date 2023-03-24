@@ -38,10 +38,10 @@ var (
 	modelSchemaGroup = singleflight.Group{}
 )
 
-func GetCrdModelsSchemas(models ...Model) []*ModelSchema {
+func GetCRDModelsSchemas(models ...Model) []*ModelSchema {
 	var ret []*ModelSchema
 	for _, m := range models {
-		schema := GetCrdModelSchema(m)
+		schema := GetCRDModelSchema(m)
 		if !schema.IsEmpty() {
 			ret = append(ret, schema)
 		}
@@ -49,10 +49,10 @@ func GetCrdModelsSchemas(models ...Model) []*ModelSchema {
 	return ret
 }
 
-func GetCrdModelSchema(m Model) *ModelSchema {
+func GetCRDModelSchema(m Model) *ModelSchema {
 	// use struct id as key
 	res, _, _ := modelSchemaGroup.Do(utils.GetStructID(m), func() (interface{}, error) {
-		obj, err := newCrdModelSchema(m)
+		obj, err := newCRDModelSchema(m)
 		if err != nil {
 			return &ModelSchema{}, err
 		}
@@ -61,8 +61,8 @@ func GetCrdModelSchema(m Model) *ModelSchema {
 	return res.(*ModelSchema)
 }
 
-// newCrdModelSchema
-func newCrdModelSchema(m Model) (*ModelSchema, error) {
+// newCRDModelSchema
+func newCRDModelSchema(m Model) (*ModelSchema, error) {
 	names := Model2KindName(m)
 
 	// use struct id as key, model should be struct or a struct pointer
@@ -73,7 +73,7 @@ func newCrdModelSchema(m Model) (*ModelSchema, error) {
 
 	crdJSONSchema := utils.Struct2JSONSchemaProps(m)
 
-	fields, tags, err := utils.ParseFieldsTagsByStruct(m, crdbaseTagKey)
+	fields, tags, err := utils.ParseFieldsTagsByStruct(m, crdBaseTagKey)
 	if err != nil {
 		return nil, err
 	}
@@ -131,7 +131,7 @@ func (ms *ModelSchema) Kind() string {
 }
 
 // GetPrimaryFieldValue get primary field value from a model
-func (ms *ModelSchema) GetPrimaryFieldValue(m Model) string {
+func (ms *ModelSchema) GetPrimaryFieldValue(m Data) string {
 	if ms.PrimaryField != "" {
 		v := reflect.ValueOf(m)
 		if v.Kind() == reflect.Ptr {

@@ -52,27 +52,25 @@ func EnsureStruct(i any) (any, error) {
 }
 
 // EnsureStructSlice Ensure that the type of the variable is a slice of struct
-func EnsureStructSlice(i any) (any, any, error) {
-	t := reflect.TypeOf(i)
-	if t.Kind() == reflect.Ptr {
-		t = t.Elem()
+func EnsureStructSlice(v interface{}) bool {
+	if v == nil {
+		return false
 	}
-
-	if t.Kind() != reflect.Slice {
-		return nil, nil, errors.New("not a slice")
+	t := reflect.TypeOf(v)
+	switch t.Kind() {
+	case reflect.Array, reflect.Slice:
+		return true
+	case reflect.Ptr:
+		elemType := t.Elem()
+		if elemType.Kind() == reflect.Struct {
+			return false
+		} else if elemType.Kind() == reflect.Slice {
+			return true
+		}
+		return EnsureStructSlice(elemType)
+	default:
+		return false
 	}
-
-	underT := t.Elem()
-
-	if underT.Kind() != reflect.Ptr {
-		underT = underT.Elem()
-	}
-
-	if underT.Kind() != reflect.Struct {
-		return nil, nil, errors.New("not a slice of struct")
-	}
-
-	return t, underT, nil
 }
 
 // GetStructName returns the name of the struct
@@ -164,11 +162,4 @@ func Map2JSONStruct(in map[string]any, out any) error {
 func Struct2JSONSchema(in any) *jsonschema.Schema {
 	reflect := &jsonschema.Reflector{DoNotReference: true, ExpandedStruct: true}
 	return reflect.Reflect(in)
-}
-
-func IsList(in any) bool {
-	if _, _, err := EnsureStructSlice(in); err != nil {
-		return false
-	}
-	return true
 }

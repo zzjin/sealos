@@ -33,15 +33,18 @@ func GuessShortNames(name string) string {
 	return ret.String()
 }
 
-func GenNanoID(length ...int) string {
-	nanoLength := 12
+const alphabet = "abcdefghijklmnopqrstuvwxyz"
 
+// GenerateMetaName generates a lowercase RFC 1123-compliant nanoid with specified length
+func GenerateMetaName(length ...int) string {
+	nanoLength := 12
 	if len(length) > 0 {
 		if length[0] >= 2 || length[0] <= 255 {
 			nanoLength = length[0]
 		}
 	}
-
-	randID, _ := nanoid.Standard(nanoLength)
-	return randID()
+	// Use the go-nanoid package to generate a custom nanoid with length
+	gener, _ := nanoid.Custom(alphabet, nanoLength)
+	label := gener()
+	return label
 }

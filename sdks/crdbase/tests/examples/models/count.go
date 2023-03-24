@@ -23,6 +23,6 @@ type Count struct {
 	Counter   int64     `json:"count"`
 }
 
-func (c *Count) Get(db *crdb.CrdBase, name string, countType CountType) (int64, error) {
+func (c *Count) Get(db *crdb.CRDBase, name string, countType CountType) (int64, error) {
 	return 0, nil
 }

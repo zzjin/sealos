@@ -11,7 +11,6 @@ import (
 	"github.com/labring/crdbase/tests/examples/models"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/selection"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -88,7 +87,7 @@ func main() {
 	// }
 	// fmt.Println(node.Items)
 
-	conf := crdb.CrdBaseConfig{
+	conf := crdb.CRDBaseConfig{
 		Manager: mgr,
 		GroupVersion: schema.GroupVersion{
 			Group:   "test.sealos.io",
@@ -98,7 +97,7 @@ func main() {
 		Namespace:      "crdb-test",
 	}
 
-	db, err := crdb.NewCrdBase(conf, setupLog)
+	db, err := crdb.NewCRDBase(conf, setupLog)
 	if err != nil {
 		panic(err)
 	}
@@ -108,37 +107,34 @@ func main() {
 	}
 
 	dbCount := &models.Count{
-		Name:      "labring/affine",
+		Name:      "labring-affine",
 		CountType: models.DownloadCount,
-		Counter:   12,
+		Counter:   237,
 	}
 
-	update, c, err := db.Model(models.Count{}).CreateOrUpdate(ctx, dbCount, func() error {
-		dbCount.Counter++
-		return nil
-	})
+	action := db.Model(models.Count{})
 
+	//update, c, err := action.UpdateWithMutator(ctx, dbCount, func() error {
+	//	dbCount.Counter += 1
+	//	return nil
+	//})
+
+	update, c, err := action.Update(ctx, dbCount)
 	if err != nil {
+		fmt.Println(err)
 		return
 	}
+
 	fmt.Println(update, c)
-	q := query.Query{
-		Kind: "",
-		Filter: []query.Filter{
-			{
-				Operator: selection.GreaterThan,
-				Field:    "count",
-				Value:    "10",
-			},
-		},
-		Order:      []query.Order{},
-		Distinct:   false,
-		DistinctOn: nil,
-		Page:       1,
-		Limit:      10,
-	}
-	err = db.Model(models.Count{}).Get(ctx, q, dbCount)
-	if err != nil {
-		return
-	}
+
+	q := query.Query{}
+
+	//var res []models.Count
+	//err = db.Model(models.Count{}).Get(ctx, q, &res)
+	//fmt.Println(res, err)
+
+	var res models.Count
+	err = db.Model(models.Count{}).Get(ctx, q, &res)
+	fmt.Println(res, err)
+	return
 }

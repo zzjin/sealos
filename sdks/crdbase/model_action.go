@@ -21,29 +21,27 @@ import (
 
 	"github.com/labring/crdbase/query"
 	"github.com/labring/crdbase/utils"
-	"k8s.io/apimachinery/pkg/selection"
-
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/apimachinery/pkg/types"
-
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/kustomize/kyaml/yaml"
 )
 
 type ModelAction struct {
-	CrdBase
+	CRDBase
 	ModelSchema
 
 	gvk schema.GroupVersionKind
 }
 
-func (crdb *CrdBase) Model(m Model) *ModelAction {
-	modelSchema := GetCrdModelSchema(m)
+func (crdb *CRDBase) Model(m Model) *ModelAction {
+	modelSchema := GetCRDModelSchema(m)
 
 	return &ModelAction{
-		CrdBase:     *crdb,
+		CRDBase:     *crdb,
 		ModelSchema: *modelSchema,
 
 		gvk: schema.GroupVersionKind{
@@ -96,7 +94,26 @@ func (ma *ModelAction) Create(ctx context.Context, data Data) (string, controlle
 	return cr.GetName(), controllerutil.OperationResultCreated, nil
 }
 
-func (ma *ModelAction) CreateOrUpdate(ctx context.Context, data Data, f MutateFn) (string, controllerutil.OperationResult, error) {
+// Update updates the object with the given mutate function.
+func (ma *ModelAction) Update(ctx context.Context, data Data) (string, controllerutil.OperationResult, error) {
+	if reflect.TypeOf(data).Kind() == reflect.Slice {
+		return "", controllerutil.OperationResultNone, fmt.Errorf("data must be a pointer to a struct, not slice")
+	}
+	// Unstructured to create CR
+	obj, err := ma.Data2Unstructured(data)
+	if err != nil {
+		return "", controllerutil.OperationResultNone, err
+	}
+
+	name, optRes, err := utils.UpdateWithRetry(ctx, ma.client, obj)
+	if err != nil {
+		return name, optRes, err
+	}
+	return name, optRes, nil
+}
+
+// UpdateWithMutator updates the object with the given mutate function, object must exist.
+func (ma *ModelAction) UpdateWithMutator(ctx context.Context, data Data, f MutateFn) (string, controllerutil.OperationResult, error) {
 	if reflect.TypeOf(data).Kind() == reflect.Slice {
 		return "", controllerutil.OperationResultNone, fmt.Errorf("data must be a pointer to a struct, not slice")
 	}
@@ -107,14 +124,22 @@ func (ma *ModelAction) CreateOrUpdate(ctx context.Context, data Data, f MutateFn
 		return "", controllerutil.OperationResultNone, err
 	}
 
-	// TODO impl. add retry and test
-	update, err := controllerutil.CreateOrUpdate(ctx, ma.client, obj, func() error {
-		return f()
+	name, optRes, err := utils.CreateOrUpdateWithRetry(ctx, ma.client, obj, func() error {
+		// get the latest version of the object
+		ma.client.Get(ctx, ma.NamespacedName(obj.GetName()), obj)
+		ma.Unstructured2Data(obj, data)
+		// mutate the object
+		if err = f(); err != nil {
+			return err
+		}
+		obj, _ = ma.Data2Unstructured(data)
+		return nil
 	})
 	if err != nil {
-		return "", update, err
+		return name, optRes, err
 	}
-	return obj.GetName(), update, nil
+	ma.Unstructured2Data(obj, data)
+	return name, optRes, nil
 }
 
 func (ma *ModelAction) CreateOrUpdateList(ctx context.Context, model any, f MutateFn) (string, controllerutil.OperationResult, error) {
@@ -158,7 +183,7 @@ func (ma *ModelAction) Get(ctx context.Context, q query.Query, data Data) error 
 	}
 
 	// if data is not a list, then return the first item
-	if !utils.IsList(data) {
+	if !utils.EnsureStructSlice(data) {
 		if res.Items == nil || len(res.Items) == 0 {
 			return fmt.Errorf("no result found")
 		}
@@ -166,7 +191,7 @@ func (ma *ModelAction) Get(ctx context.Context, q query.Query, data Data) error 
 			return fmt.Errorf("failed to convert map to struct: %w", err)
 		}
 	} else {
-		if err := ma.UnstructuredList2DataList(res, data.([]Data)); err != nil {
+		if err := ma.UnstructuredList2DataList(res, data); err != nil {
 			return fmt.Errorf("failed to convert map to struct: %w", err)
 		}
 	}
@@ -177,8 +202,8 @@ func (ma *ModelAction) Data2Unstructured(data Data) (*unstructured.Unstructured,
 	name := ma.GetPrimaryFieldValue(data)
 	if name == "" && ma.PrimaryField != "" {
 		return nil, fmt.Errorf("Data2Unstructured error: primary field %s has been setted, but value is empty", ma.PrimaryField)
-	} else {
-		name = utils.GenNanoID()
+	} else if name == "" {
+		name = utils.GenerateMetaName()
 	}
 
 	modelMap, err := utils.StructJSON2Map(data)
@@ -210,20 +235,20 @@ func (ma *ModelAction) Data2Unstructured(data Data) (*unstructured.Unstructured,
 
 // Unstructured2Data draft impl. TODO: review and test this!
 func (ma *ModelAction) Unstructured2Data(u *unstructured.Unstructured, data Data) error {
-	if err := utils.Map2JSONStruct(u.UnstructuredContent(), &data); err != nil {
+	if err := utils.Map2JSONStruct(u.UnstructuredContent()["spec"].(map[string]any), &data); err != nil {
 		return fmt.Errorf("failed to convert map to struct: %w", err)
 	}
 	return nil
 }
 
 // UnstructuredList2DataList draft impl. TODO: review and test this!
-func (ma *ModelAction) UnstructuredList2DataList(ul *unstructured.UnstructuredList, datas []Data) error {
+func (ma *ModelAction) UnstructuredList2DataList(ul *unstructured.UnstructuredList, datas Data) error {
 	for _, u := range ul.Items {
 		var data Data
-		if err := utils.Map2JSONStruct(u.UnstructuredContent(), &data); err != nil {
+		if err := utils.Map2JSONStruct(u.UnstructuredContent()["spec"].(map[string]any), &data); err != nil {
 			return fmt.Errorf("failed to convert map to struct: %w", err)
 		}
-		datas = append(datas, data)
+		reflect.ValueOf(datas).Elem().Set(reflect.Append(reflect.ValueOf(datas).Elem(), reflect.ValueOf(data)))
 	}
 	return nil
 }
