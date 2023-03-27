@@ -42,11 +42,11 @@ func TestGuessShortName(t *testing.T) {
 	}
 }
 
-func TestGenNanoID(t *testing.T) {
+func TestGenerateID(t *testing.T) {
 	m := map[string]struct{}{}
 
 	for i := 0; i < 1000; i++ {
-		id := GenNanoID()
+		id := GenerateID()
 		if _, ok := m[id]; ok || id == "" {
 			t.Errorf("nano id duplicated: %s", id)
 		} else {
@@ -55,9 +55,9 @@ func TestGenNanoID(t *testing.T) {
 	}
 }
 
-func TestGenNanoIDRFC1123(t *testing.T) {
+func TestGenerateIDRFC1123(t *testing.T) {
 	for i := 0; i < 10000000; i++ {
-		id := GenNanoID()
+		id := GenerateID()
 		if id != "" && id[0] >= 30 && id[0] <= 39 {
 			fmt.Printf("not spec: %s\n", id)
 		}

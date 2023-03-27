@@ -199,12 +199,7 @@ func (ma *ModelAction) Get(ctx context.Context, q query.Query, data Data) error 
 }
 
 func (ma *ModelAction) Data2Unstructured(data Data) (*unstructured.Unstructured, error) {
-	name := ma.GetPrimaryFieldValue(data)
-	if name == "" && ma.PrimaryField != "" {
-		return nil, fmt.Errorf("Data2Unstructured error: primary field %s has been setted, but value is empty", ma.PrimaryField)
-	} else if name == "" {
-		name = utils.GenerateMetaName()
-	}
+	metadataName := utils.GenerateID()
 
 	modelMap, err := utils.StructJSON2Map(data)
 	if err != nil {
@@ -217,7 +212,7 @@ func (ma *ModelAction) Data2Unstructured(data Data) (*unstructured.Unstructured,
 			"apiVersion": ma.ApiVersion(),
 			"kind":       ma.Names.Kind,
 			"metadata": map[string]any{
-				"name":      name,
+				"name":      metadataName,
 				"namespace": ma.Namespace,
 				//"labels": map[string]any{
 				//	crdBaseURL + "/managed-by": providerName,

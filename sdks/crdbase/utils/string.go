@@ -70,10 +70,10 @@ func GuessShortNames(name string) string {
 
 const alphabet = "123456789abcdefghijkmnopqrstuvwxyz"
 
-// GenNanoID generates a short-term unique id, with timestamp order.
-// When sonyflake returns error(witch almost never happen), return real random string.
-// @Note: All random string must follow [RFC 1123 Label Names](https://kubernetes.io/docs/concepts/overview/working-with-objects/names/)
-func GenNanoID() string {
+// GenerateID generates a short-term unique int64 id, with timestamp order
+// Return as string witch matches [RFC 1123 Label Names](https://kubernetes.io/docs/concepts/overview/working-with-objects/names/)
+// When sonyflake give error(witch almost never happen), return real random string.
+func GenerateID() string {
 	id, err := sf.NextID()
 	if err != nil {
 		// over the max speed, using another time method?

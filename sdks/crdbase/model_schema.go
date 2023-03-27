@@ -16,19 +16,19 @@ package crdb
 
 import (
 	"fmt"
-	"reflect"
+	"strings"
 
 	"github.com/labring/crdbase/utils"
-
 	"golang.org/x/sync/singleflight"
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 type ModelSchema struct {
-	ID           string
-	PrimaryField string
+	IdentifyKey string // key for unique model structure
 
 	Indexes [][]string
+	Uniques [][]string
 
 	Names apiextv1.CustomResourceDefinitionNames
 	Spec  map[string]apiextv1.JSONSchemaProps
@@ -66,8 +66,8 @@ func newCRDModelSchema(m Model) (*ModelSchema, error) {
 	names := Model2KindName(m)
 
 	// use struct id as key, model should be struct or a struct pointer
-	id := utils.GetStructID(m)
-	if id == "" {
+	identifyKey := utils.GetStructID(m)
+	if identifyKey == "" {
 		return nil, fmt.Errorf("model %s id is empty", names.Kind)
 	}
 
@@ -78,8 +78,8 @@ func newCRDModelSchema(m Model) (*ModelSchema, error) {
 		return nil, err
 	}
 
-	var primaryField string
 	var indexes [][]string
+	var uniques [][]string
 
 	for name, tag := range tags {
 		if tag == nil {
@@ -90,31 +90,28 @@ func newCRDModelSchema(m Model) (*ModelSchema, error) {
 			if !ok {
 				return nil, fmt.Errorf("field %s not found", field.Name)
 			}
-			if opt == "primaryKey" {
-				if primaryField != "" {
-					return nil, fmt.Errorf("duplicate primary field %s and %s", primaryField, field.Name)
-				}
-				if field.Type.Kind() != reflect.String {
-					return nil, fmt.Errorf("primary field %s must be string", field.Name)
-				}
-				primaryField = field.Name
-				// primary ~= index
-				indexes = append(indexes, []string{field.Name})
-				break
-			}
 			if opt == "index" {
 				indexes = append(indexes, []string{field.Name})
 				continue
 			}
+			if opt == "unique" {
+				// unique ~= index
+				indexes = append(indexes, []string{field.Name})
+				uniques = append(uniques, []string{field.Name})
+				break
+			}
 		}
 	}
 
+	indexes = utils.UniqSliceSlice(indexes)
+	uniques = utils.UniqSliceSlice(uniques)
+
 	return &ModelSchema{
-		ID:           id,
-		Names:        names,
-		Spec:         crdJSONSchema,
-		PrimaryField: primaryField,
-		Indexes:      indexes,
+		IdentifyKey: identifyKey,
+		Names:       names,
+		Spec:        crdJSONSchema,
+		Indexes:     indexes,
+		Uniques:     uniques,
 	}, nil
 }
 
@@ -130,24 +127,11 @@ func (ms *ModelSchema) Kind() string {
 	return ms.Names.Kind
 }
 
-// GetPrimaryFieldValue get primary field value from a model
-func (ms *ModelSchema) GetPrimaryFieldValue(m Data) string {
-	if ms.PrimaryField != "" {
-		v := reflect.ValueOf(m)
-		if v.Kind() == reflect.Ptr {
-			v = v.Elem()
-		}
-		v = v.FieldByName(ms.PrimaryField)
-		if v.Kind() == reflect.Ptr {
-			v = v.Elem()
-		}
-		if v.Kind() == reflect.String {
-			str := v.String()
-			if str != "" {
-				return str
-			}
-		}
+func (ms *ModelSchema) GetIndexesFunc(indexes []string) (string, client.IndexerFunc) {
+	refName := fmt.Sprintf("%sRef", strings.Join(indexes, ""))
+	indexerFunc := func(obj client.Object) []string {
+		return indexes
 	}
 
-	return ""
+	return refName, indexerFunc
 }

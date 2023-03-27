@@ -18,7 +18,7 @@ func (ct CountType) String() string {
 }
 
 type Count struct {
-	Name      string    `json:"name" crdb:"name,primaryKey"`
+	Name      string    `json:"name" crdb:"name,unique"`
 	CountType CountType `json:"type" crdb:"type,index"`
 	Counter   int64     `json:"count"`
 }

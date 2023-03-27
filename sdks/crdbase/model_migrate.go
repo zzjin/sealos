@@ -53,7 +53,11 @@ func (crdb *CRDBase) AutoMigrate(ctx context.Context, models ...any) error {
 		return fmt.Errorf("unable to apply rbac: %w", err)
 	}
 
-	// TODO: add indexes
+	if err := crdb.applyCache(ctx, models); err != nil {
+		return fmt.Errorf("unable to apply cache: %w", err)
+	}
+
+	// TODO: add uniques
 
 	return nil
 }
@@ -71,19 +75,6 @@ func (crdb *CRDBase) generateCRDs(models []any) ([]*apiextv1.CustomResourceDefin
 
 	return crds, nil
 }
-
-// func (crdb *CRDBase) addToSchemes(crds []*apiextv1.CustomResourceDefinition) {
-// 	sch := crdb.Manager.GetScheme()
-
-// 	for _, crd := range crds {
-// 		gv := schema.GroupVersion{
-// 			Group:   crd.Spec.Group,
-// 			Version: crd.Spec.Versions[0].Name,
-// 		}
-// 		schemeBuilder := &scheme.Builder{GroupVersion: gv}
-// 		schemeBuilder.AddToScheme(sch)
-// 	}
-// }
 
 func (crdb *CRDBase) getNamesByCRDs(crds []*apiextv1.CustomResourceDefinition) []apiextv1.CustomResourceDefinitionNames {
 	var namess []apiextv1.CustomResourceDefinitionNames
@@ -310,6 +301,23 @@ func (crdb *CRDBase) deleteRBAC(ctx context.Context, namess []apiextv1.CustomRes
 				if !apierrors.IsNotFound(err) {
 					return err
 				}
+			}
+		}
+	}
+
+	return nil
+}
+
+func (crdb *CRDBase) applyCache(ctx context.Context, models []any) error {
+	fieldIndexer := crdb.Manager.GetFieldIndexer().IndexField
+
+	for _, m := range models {
+		mObj := crdb.Model(m)
+
+		for _, indexes := range mObj.Indexes {
+			refName, indexerFunc := mObj.GetIndexesFunc(indexes)
+			if err := fieldIndexer(ctx, mObj.NewUnstructured(), refName, indexerFunc); err != nil {
+				return err
 			}
 		}
 	}

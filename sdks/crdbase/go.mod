@@ -9,9 +9,9 @@ require (
 	github.com/invopop/jsonschema v0.7.0
 	github.com/jaevor/go-nanoid v1.3.0
 	github.com/jinzhu/inflection v1.0.0
-	github.com/labring/sealos/controllers/user v0.0.0-20230324030755-ec97abfbfeb1
 	github.com/mitchellh/mapstructure v1.5.0
 	github.com/sony/sonyflake v1.1.0
+	golang.org/x/exp v0.0.0-20230321023759-10a507213a29
 	golang.org/x/sync v0.1.0
 	k8s.io/api v0.25.6
 	k8s.io/apiextensions-apiserver v0.25.0

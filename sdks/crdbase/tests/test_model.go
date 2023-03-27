@@ -8,7 +8,7 @@ import (
 
 // TestModel for all test s model define
 type TestModel struct {
-	User string    `json:"user" crdb:"user,primaryKey"`
+	User string    `json:"user" crdb:"user,unique"`
 	Name string    `json:"name" crdb:"name,index"`
 	Age  int64     `json:"age"`
 	Info *TestInfo `json:"info"`
@@ -27,7 +27,7 @@ var (
 			Name:      "User",
 			PkgPath:   "",
 			Type:      reflect.TypeOf(string("")),
-			Tag:       reflect.StructTag(`json:"user" crdb:"user,primaryKey"`),
+			Tag:       reflect.StructTag(`json:"user" crdb:"user,unique"`),
 			Offset:    0,
 			Index:     []int{0},
 			Anonymous: false,
@@ -65,7 +65,7 @@ var (
 		"User": {
 			Key:     "crdb",
 			Name:    "user",
-			Options: []string{"primaryKey"},
+			Options: []string{"unique"},
 		},
 		"Name": {
 			Key:     "crdb",
