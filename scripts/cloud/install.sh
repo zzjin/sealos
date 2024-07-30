@@ -27,7 +27,7 @@ cert_manager_version=${cert_manager_version:-"1.14.6"}
 helm_version=${helm_version:-"3.14.1"}
 openebs_version=${openebs_version:-"3.10.0"}
 istio_base_version=${istio_base_version:-"1.22.1"}
-higress_version=${higress_version:-"1.4.1"}
+higress_version=${higress_version:-"1.4.2"}
 kubeblocks_version=${kubeblocks_version:-"0.8.2"}
 metrics_server_version=${metrics_server_version:-"0.6.4"}
 victoria_metrics_k8s_stack_version=${victoria_metrics_k8s_stack_version:-"1.96.0"}
@@ -56,7 +56,6 @@ PROMPTS_EN=(
     ["k8s_installation"]="Installing Kubernetes cluster."
     ["partner_installation"]="Installing Higress and Kubeblocks."
     ["installing_monitoring"]="Installing kubernetes monitoring."
-    ["patching_ingress"]="Modifying the tolerance of Higress to allow it to run on the master node."
     ["installing_cloud"]="Installing Sealos Cloud."
     ["avx_not_supported"]="CPU does not support AVX instruction set."
     ["ssh_private_key"]="Please enter the ssh private key path (Press enter to use the default value: '/root/.ssh/id_rsa'): "
@@ -76,8 +75,8 @@ Options:
   --cert-manager-version            # Cert Manager version (default: 1.14.6)
   --helm-version                    # Helm version (default: 3.14.1)
   --openebs-version                 # OpenEBS version (default: 3.10.0)
-  --istio-base-version              # Istio/base version (default: 1.4.1)
-  --higress-version                 # Higress version (default: 1.4.1)
+  --istio-base-version              # Istio/base version (default: 1.22.1)
+  --higress-version                 # Higress version (default: 1.4.2)
   --kubeblocks-version              # Kubeblocks version (default: 0.8.2)
   --metrics-server-version          # Metrics Server version (default: 0.6.4)
   --cloud-version                   # Sealos Cloud version (default: latest)
@@ -118,7 +117,6 @@ PROMPTS_CN=(
     ["k8s_installation"]="正在安装 Kubernetes 集群."
     ["partner_installation"]="正在安装 Higress 和 Kubeblocks."
     ["installing_monitoring"]="正在安装 kubernetes 监控."
-    ["patching_ingress"]="正在修改 Higress 的容忍度, 以允许它在主节点上运行."
     ["installing_cloud"]="正在安装 Sealos Cloud."
     ["avx_not_supported"]="CPU 不支持 AVX 指令集."
     ["ssh_private_key"]="请输入 ssh 私钥路径 (回车使用默认值: '/root/.ssh/id_rsa'): "
@@ -139,7 +137,7 @@ Options:
   --helm-version                  # Helm版本 (默认: 3.14.1)
   --openebs-version               # OpenEBS版本 (默认: 3.10.0)
   --istio-base-version            # Istio/base版本 (默认: 1.22.1)
-  --higress-version               # Higress版本 (默认: 1.4.1)
+  --higress-version               # Higress版本 (默认: 1.4.2)
   --kubeblocks-version            # Kubeblocks版本 (默认: 0.8.2)
   --metrics-server-version        # Metrics Server版本 (默认: 0.6.4)
   --cloud-version                 # Sealos Cloud版本 (默认: latest)
@@ -253,7 +251,7 @@ init() {
     pull_image "helm" "v${helm_version#v:-3.14.1}"
     pull_image "openebs" "v${openebs_version#v:-3.10.0}"
     pull_image "istio-base" "v${istio_base_version#v:-1.22.1}"
-    pull_image "higress" "v${higress_version#v:-1.4.1}"
+    pull_image "higress" "v${higress_version#v:-1.4.2}"
     pull_image "kubeblocks" "v${kubeblocks_version#v:-0.8.2}"
     pull_image "kubeblocks-redis" "v${kubeblocks_version#v:-0.8.2}"
     pull_image "kubeblocks-apecloud-mysql" "v${kubeblocks_version#v:-0.8.2}"
@@ -339,12 +337,6 @@ collect_input() {
 }
 
 prepare_configs() {
-    IFS=',' read -r -a cmaster_ips <<< "$master_ips"
-    IFS=',' read -r -a cnode_ips <<< "$node_ips"
-    local num_masters=${#cmaster_ips[@]}
-    local num_nodes=${#cnode_ips[@]}
-    local total_nodes=$((num_masters + num_nodes))
-
     if [[ -n "${cert_path}" ]] || [[ -n "${key_path}" ]]; then
         # Convert certificate and key to base64
         tls_crt_base64=$(cat $cert_path | base64 | tr -d '\n')
@@ -388,7 +380,11 @@ spec:
       hostNetwork: true
       service:
         type: NodePort
-      replicas: ${total_nodes}
+      kind: DaemonSet
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
       resources:
         requests:
           cpu: 256m
@@ -396,12 +392,15 @@ spec:
         limits:
           memory: 4Gi
     controller:
-      replicas: ${num_masters}
+      autoscaling:
+        enabled: true
+      nodeSelector:
+        node-role.kubernetes.io/control-plane: ''
       resources:
         requests:
           cpu: 256m
           memory: 256Mi
-  match: ${image_registry}/${image_repository}/higress:v${higress_version#v:-1.4.1}
+  match: ${image_registry}/${image_repository}/higress:v${higress_version#v:-1.4.2}
   path: charts/higress/charts/higress-core/values.yaml
   strategy: merge
 "
@@ -414,7 +413,7 @@ metadata:
 spec:
   data: |
     replicaCount: 0
-  match: ${image_registry}/${image_repository}/higress:v${higress_version#v:-1.4.1}
+  match: ${image_registry}/${image_repository}/higress:v${higress_version#v:-1.4.2}
   path: charts/higress/charts/higress-console/values.yaml
   strategy: merge
 "
@@ -434,7 +433,7 @@ data:
     - domains:
         - '*.$cloud_domain'
         - '$cloud_domain'
-      tlsSecret: wildcard-cert
+      tlsSecret: sealos-system/wildcard-cert
 kind: ConfigMap
 metadata:
   name: higress-https
@@ -686,7 +685,7 @@ EOF
 
     get_prompt "partner_installation"
     sealos run ${image_registry}/${image_repository}/istio-base:v${istio_base_version#v:-1.22.1}
-    sealos run ${image_registry}/${image_repository}/higress:v${higress_version#v:-1.4.1} --config-file $CLOUD_DIR/higress-config.yaml --config-file $CLOUD_DIR/higress-console-config.yaml
+    sealos run ${image_registry}/${image_repository}/higress:v${higress_version#v:-1.4.2} --config-file $CLOUD_DIR/higress-config.yaml --config-file $CLOUD_DIR/higress-console-config.yaml
     kubectl apply -f $CLOUD_DIR/higress-https.yaml
     kubectl apply -f $CLOUD_DIR/higress-plugins.yaml
 
@@ -701,9 +700,6 @@ EOF
     kubectl apply -f $CLOUD_DIR/vm-secret.yaml
     kubectl patch vmagent -n vm victoria-metrics-k8s-stack --type merge -p '{"spec":{"additionalScrapeConfigs":{"key":"prometheus-additional.yaml","name":"additional-scrape-configs"}}}'
     kubectl rollout restart deploy -n vm vmagent-victoria-metrics-k8s-stack || true
-
-    get_prompt "patching_ingress"
-    kubectl -n higress-system patch deploy higress-gateway -p '{"spec":{"template":{"spec":{"tolerations":[{"key":"node-role.kubernetes.io/control-plane","operator":"Exists","effect":"NoSchedule"}]}}}}'
 
     get_prompt "installing_cloud"
 
