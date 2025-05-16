@@ -86,17 +86,20 @@ Authorization ""
 		},
 	}
 
-	tls := networkingv1.IngressTLS{
-		Hosts:      []string{host},
-		SecretName: r.CtrConfig.TerminalConfig.IngressTLSSecretName,
-	}
-
 	ingress := &networkingv1.Ingress{
 		ObjectMeta: objectMeta,
 		Spec: networkingv1.IngressSpec{
 			Rules: []networkingv1.IngressRule{rule},
-			TLS:   []networkingv1.IngressTLS{tls},
 		},
 	}
+
+	if !r.CtrConfig.TerminalConfig.IngressTLSDisabled {
+		tls := networkingv1.IngressTLS{
+			Hosts:      []string{host},
+			SecretName: r.CtrConfig.TerminalConfig.IngressTLSSecretName,
+		}
+		ingress.Spec.TLS = []networkingv1.IngressTLS{tls}
+	}
+
 	return ingress
 }

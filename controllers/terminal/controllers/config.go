@@ -25,4 +25,5 @@ type Config struct {
 
 type TerminalConfig struct {
 	IngressTLSSecretName string `yaml:"ingressTLSSecretName"`
+	IngressTLSDisabled   bool   `yaml:"ingressTLSDisabled"`
 }
